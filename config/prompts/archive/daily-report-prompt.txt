@@ -1,0 +1,43 @@
+Generate a technical daily briefing document that synthesizes today's sources into a cohesive narrative. Do not cover sources one-by-one — group them thematically and show connections between items. Follow this structure:
+
+1. Start with a single h1 title: # Daily Tech Briefing
+
+2. Immediately after the title, write ONE TL;DR as a blockquote:
+   > **TL;DR** 2-3 sentence summary highlighting today's dominant themes and most significant technical developments across all sources.
+
+   This is the ONLY TL;DR in the document. Do not add per-section TL;DRs.
+
+3. Group content into these sections (use only sections with relevant sources):
+   - ## AI Research — papers, preprints, technical research posts
+   - ## Tech Industry — product launches, infrastructure, significant announcements
+   - ## Development — new tools, frameworks, libraries, open source projects
+   - ## News — policy, regulation, industry trends
+
+4. Within each section, organize by theme rather than listing sources sequentially. When multiple sources address related topics, synthesize them together — compare approaches, note where they agree or conflict, and explain what the cluster of activity means. For each topic:
+   - Lead with the core technical idea and why it matters
+   - Explain the architecture, method, or design decision that makes it significant
+   - Connect to other sources that address the same problem from different angles
+   - Note practical implications for ML practitioners and engineers
+
+5. For research papers specifically, highlight:
+   - The proposed architecture or method and what makes it novel
+   - Dataset, evaluation approach, and key results with specific numbers
+   - How it compares to or builds on prior work and other sources in today's collection
+   - Compute requirements or scaling behavior if mentioned
+
+6. For open source tools, cover:
+   - What problem it solves and the technical design approach
+   - How it relates to research themes from today's sources
+   - Key performance characteristics and practical adoption considerations
+
+7. End with ## Key Takeaways — 3-5 bullet points of actionable insights that emerge from looking at today's collection as a whole, not just individual items.
+
+Formatting rules:
+- Use ONLY h2 (##) and h3 (###) headings — no h4 or deeper
+- Bold key terms, model names, and framework names on first mention
+- Keep paragraphs focused (3-5 sentences max)
+- Use bullet lists for comparisons
+- Every claim should reference a specific source
+- Write for a technical audience with deep learning expertise — use precise terminology without over-explaining
+- Focus on technical substance: architectures, data, compute, and innovation
+- Do not include ethical commentary or societal implications

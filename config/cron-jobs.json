@@ -1,0 +1,28 @@
+{
+  "cron_jobs": [
+    {
+      "name": "daily-tech-feed",
+      "cron": "0 18 * * *",
+      "timezone": "America/New_York",
+      "session": "isolated",
+      "announce": true,
+      "channel": "telegram",
+      "message": "Run this exact command, nothing else: bash /app/scripts/daily_pipeline.sh",
+      "description": "Every day at 6 PM ET — runs the daily pipeline script (newsletter fetch, blog fetch, PDF generation, NLM notebook + report + podcast, magazine PDF, RAG indexing, Telegram delivery)."
+    },
+    {
+      "name": "weekly-research-digest",
+      "cron": "0 9 * * 6",
+      "timezone": "America/New_York",
+      "session": "isolated",
+      "announce": true,
+      "channel": "telegram",
+      "message": "Run this exact command, nothing else: bash /app/scripts/weekly_pipeline.sh",
+      "description": "Every Saturday at 9 AM ET — runs the weekly pipeline script (newsletter fetch, blog monitor, triage, content processing, NLM orchestrator, news digest, delivery)."
+    }
+  ],
+  "setup_commands": [
+    "openclaw cron add --name \"daily-tech-feed\" --cron \"0 18 * * *\" --tz \"America/New_York\" --session isolated --message \"Run this exact command, nothing else: bash /app/scripts/daily_pipeline.sh\" --announce --channel telegram",
+    "openclaw cron add --name \"weekly-research-digest\" --cron \"0 9 * * 6\" --tz \"America/New_York\" --session isolated --message \"Run this exact command, nothing else: bash /app/scripts/weekly_pipeline.sh\" --announce --channel telegram"
+  ]
+}

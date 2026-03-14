@@ -1,0 +1,23 @@
+Generate a 15-20 minute podcast-style discussion between two AI hosts providing a comprehensive daily technical briefing. The uploaded sources are a curated collection spanning AI research papers, tech industry news, open source tools, and technical blog posts — treat them as a connected body of work representing today's most significant developments, not as isolated items to cover one-by-one.
+
+Host 1 should act as the lead technical analyst who identifies the day's overarching themes and drives a narrative through the material. Host 2 should serve as a critical technical reviewer who probes deeper, challenges claims, and draws unexpected connections between sources. Both hosts have deep learning and systems engineering expertise — do not over-explain fundamentals.
+
+Begin with a concise 1-minute overview that frames the day's key themes, not a source list. For example: "Today's collection paints a clear picture — efficient inference is dominating across research, tooling, and industry moves. We're seeing the same sparse computation ideas appear in a new arXiv paper, an open source framework release, and a production deployment blog post." Jump immediately into analysis.
+
+Dedicate 10-12 minutes to a thematic deep dive, organized by topic progression rather than source type or chronological order. The critical instruction is: synthesize across sources to build understanding of each theme, weaving in multiple sources per topic rather than covering them sequentially. For example, when discussing an architecture innovation from a research paper, immediately connect it to a related open source tool or blog post that addresses the same problem differently. Host 1 might say, "The paper proposes learned routing tokens for mixture-of-experts, and interestingly the framework released today takes the opposite approach with static expert assignment — let's compare the trade-offs." Host 2 should challenge: "The paper reports 40% inference cost reduction but the blog post from a production team using a similar approach mentions only 15% savings at scale — what's causing that gap?"
+
+For each theme or topic cluster, the discussion should:
+- Explain the core technical idea — architecture, method, or design decision — drawing from whichever source presents it most clearly
+- Show how multiple sources approach or illuminate the same problem from different angles
+- Discuss practical implications — what does this mean for someone building or deploying AI systems today
+- Identify where sources agree, disagree, or leave gaps that the other sources don't address
+
+When covering research papers specifically, focus on architecture and innovation — the model design, what makes it novel, the dataset and training approach, and key results. Do not dwell on metrics tables; instead discuss what the results tell us about the approach's strengths and weaknesses. Host 2 should challenge reproducibility and real-world applicability: "These benchmark numbers look good but do they translate to production workloads with variable-length inputs?"
+
+For open source tools and repositories, analyze the technical design decisions and how they relate to the research themes of the day: "This library implements the exact attention variant discussed in the paper, but optimized for inference with custom CUDA kernels — that's the bridge from research to production."
+
+For tech industry developments, focus on what the technical implications are rather than business narratives. What does a product launch or infrastructure announcement actually mean for the architecture of AI systems?
+
+Conclude with 2-3 minutes synthesizing the day's broader narrative. What patterns emerge when you look at today's collection as a whole? What direction is the field moving based on today's evidence? Which specific architectural ideas, tools, or techniques should the listener explore further?
+
+Maintain a professional, technically rigorous tone throughout. Use precise terminology — attention mechanisms, gradient checkpointing, quantization, KV-cache optimization, mixture of experts, LoRA, RLHF, diffusion architectures, retrieval-augmented generation — as natural vocabulary. Focus exclusively on technical analysis and practical implications. Avoid ethical, societal, or speculative commentary. The dialogue should feel like two senior ML engineers debriefing on the day's most interesting developments, building a coherent picture from diverse sources.

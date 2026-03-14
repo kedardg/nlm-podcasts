@@ -1,0 +1,14 @@
+chromadb
+openai
+markdown-it-py
+weasyprint
+beautifulsoup4
+trafilatura
+imapclient
+feedparser
+requests
+websocket-client
+pydantic
+playwright
+mlx-lm
+pytest

@@ -1,0 +1,299 @@
+/* Research Report — PDF Stylesheet */
+
+@page {
+  size: A4 portrait;
+  margin: 22mm 20mm 22mm 20mm;
+  @top-right {
+    content: "OpenClaw Research Digest";
+    font-size: 7.5pt;
+    color: #999;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+  @bottom-center {
+    content: counter(page);
+    font-size: 7.5pt;
+    color: #999;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  }
+}
+
+/* ── Base Typography ── */
+body {
+  font-family: "Charter", "Georgia", "Times New Roman", serif;
+  font-size: 10.5pt;
+  line-height: 1.65;
+  color: #1a1a1a;
+}
+
+/* ── Title ── */
+h1 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 22pt;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  background: #1a1a2e;
+  margin: -22mm -20mm 0 -20mm;
+  padding: 18mm 20mm 10mm 20mm;
+  line-height: 1.2;
+}
+
+/* ── Table of Contents ── */
+.toc {
+  background: #f8f9fa;
+  border: 1px solid #e2e8f0;
+  border-radius: 6pt;
+  padding: 12pt 16pt 10pt 16pt;
+  margin: 14pt 0 18pt 0;
+  page-break-inside: avoid;
+}
+
+.toc-title {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 11pt;
+  font-weight: 600;
+  color: #374151;
+  margin: 0 0 6pt 0;
+  padding: 0;
+  border: none;
+  background: none;
+  border-left: none;
+}
+
+.toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  column-count: 1;
+}
+
+.toc li {
+  margin-bottom: 5pt;
+  line-height: 1.4;
+}
+
+.toc li.toc-h2 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 9pt;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.toc li.toc-h3 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 8pt;
+  font-weight: 400;
+  color: #6b7280;
+  padding-left: 10pt;
+}
+
+.toc a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.toc-desc {
+  display: block;
+  font-family: "Charter", "Georgia", "Times New Roman", serif;
+  font-size: 7.5pt;
+  font-weight: 400;
+  color: #6b7280;
+  margin-top: 1pt;
+  line-height: 1.35;
+}
+
+/* ── Section Headers (h2) ── */
+h2 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 15pt;
+  font-weight: 700;
+  color: #1a1a2e;
+  margin: 22pt 0 8pt 0;
+  padding: 0 0 4pt 0;
+  border-bottom: 2pt solid #e2e8f0;
+  page-break-after: avoid;
+}
+
+/* ── Subsection Headers (h3) ── */
+h3 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 12pt;
+  font-weight: 600;
+  color: #374151;
+  margin: 16pt 0 6pt 0;
+  padding: 0;
+  page-break-after: avoid;
+}
+
+/* ── h4 (used for sub-topics) ── */
+h4 {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 10.5pt;
+  font-weight: 600;
+  color: #4b5563;
+  margin: 12pt 0 4pt 0;
+}
+
+/* ── Paragraphs ── */
+p {
+  margin: 0 0 8pt 0;
+}
+
+/* ── TL;DR / Summary Callout ── */
+/* Triggered by blockquote that starts with "TL;DR" or bold "TL;DR" */
+blockquote {
+  background: #eff6ff;
+  border-left: 4pt solid #3b82f6;
+  border-radius: 0 6pt 6pt 0;
+  margin: 10pt 0 12pt 0;
+  padding: 10pt 14pt;
+  font-size: 9.5pt;
+  font-style: normal;
+  color: #1e3a5f;
+  line-height: 1.55;
+  page-break-inside: avoid;
+}
+
+blockquote p {
+  margin: 0 0 4pt 0;
+}
+
+blockquote p:last-child {
+  margin-bottom: 0;
+}
+
+blockquote strong:first-child,
+blockquote em:first-child {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  font-style: normal;
+  color: #1d4ed8;
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+}
+
+/* ── Report-level TL;DR (green accent — distinct from blue section blockquotes) ── */
+blockquote.report-tldr {
+  background: #f0fdf4;
+  border-left: 4pt solid #16a34a;
+  color: #14532d;
+}
+
+blockquote.report-tldr strong:first-child {
+  color: #15803d;
+}
+
+/* ── Horizontal Rules ── */
+hr {
+  border: none;
+  border-top: 1px solid #e2e8f0;
+  margin: 18pt 0;
+}
+
+/* ── Lists ── */
+ul, ol {
+  margin: 4pt 0 10pt 0;
+  padding-left: 18pt;
+}
+
+li {
+  margin-bottom: 5pt;
+  line-height: 1.55;
+}
+
+li strong {
+  color: #111;
+}
+
+/* Nested lists */
+li ul, li ol {
+  margin: 3pt 0 3pt 0;
+}
+
+/* ── Links ── */
+a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+/* ── Source Links Section ── */
+/* The "Source Links" section at the end gets special compact styling */
+h2[id*="source-links"] ~ ul,
+h2[id*="source-links"] ~ ol {
+  font-size: 8.5pt;
+  line-height: 1.4;
+}
+
+h2[id*="source-links"] ~ ul li,
+h2[id*="source-links"] ~ ol li {
+  margin-bottom: 3pt;
+}
+
+/* ── Category / origin tags ── */
+li em {
+  font-size: 8pt;
+  color: #6b7280;
+}
+
+/* ── Code ── */
+code {
+  background: #f3f4f6;
+  padding: 1pt 4pt;
+  border-radius: 3pt;
+  font-size: 9pt;
+  font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+}
+
+pre {
+  background: #f3f4f6;
+  padding: 10pt;
+  border-radius: 4pt;
+  font-size: 8pt;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* ── Tables ── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9pt;
+  margin: 8pt 0 12pt 0;
+}
+
+th {
+  background: #f3f4f6;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-weight: 600;
+  text-align: left;
+  padding: 6pt 8pt;
+  border-bottom: 2pt solid #d1d5db;
+}
+
+td {
+  padding: 5pt 8pt;
+  border-bottom: 1pt solid #e5e7eb;
+}
+
+/* ── Footer ── */
+hr:last-of-type + p {
+  font-size: 7.5pt;
+  color: #9ca3af;
+  text-align: center;
+  margin-top: 8pt;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}
+
+/* ── Page break control ── */
+li, h2, h3, h4 {
+  page-break-inside: avoid;
+}
+
+h2, h3, h4 {
+  page-break-after: avoid;
+}
+
+blockquote {
+  page-break-inside: avoid;
+}
