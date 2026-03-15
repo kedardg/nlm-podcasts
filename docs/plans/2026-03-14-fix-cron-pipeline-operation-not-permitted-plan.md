@@ -195,7 +195,7 @@ The `nlm-auth` named volume persists auth tokens across container restarts.
 - [x] `TOOLS.md` updated with `PROJECT_ROOT=/app`
 - [x] `docker compose build` succeeds
 - [x] `docker compose up -d` starts the daemon
-- [ ] `docker compose exec ... nlm login` completes (manual, one-time)
+- [x] `docker compose exec ... nlm login` completes (manual, one-time)
 - [ ] Daily pipeline runs successfully inside Docker
 - [x] `docs/BUGS.md` updated with TCC bug entry
 

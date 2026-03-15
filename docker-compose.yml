@@ -13,7 +13,7 @@ services:
       - ./rag/chroma_db:/app/rag/chroma_db
       # OpenClaw runtime (named volumes)
       - openclaw-home:/root/.openclaw
-      - nlm-auth:/root/.notebooklm-mcp
+      - ~/.notebooklm-mcp-cli:/root/.notebooklm-mcp-cli
       # Read-only config from host
       - ~/.openclaw/openclaw.json:/root/.openclaw/openclaw.json:ro
       - ~/.config/openclaw-research:/root/.config/openclaw-research:ro
@@ -39,4 +39,3 @@ services:
 
 volumes:
   openclaw-home:
-  nlm-auth:
