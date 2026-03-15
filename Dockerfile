@@ -61,4 +61,4 @@ RUN /app/.venv/bin/python3 -m playwright install --with-deps chromium
 # Data and RAG directories (expected to be bind-mounted)
 RUN mkdir -p /app/data /app/data/daily-feed /app/rag /app/tmp
 
-CMD ["openclaw", "daemon", "start", "--foreground"]
+CMD ["openclaw", "gateway", "run"]

@@ -1,7 +1,7 @@
 services:
   openclaw-research:
     build: .
-    command: openclaw daemon start --foreground
+    command: openclaw gateway run
     restart: unless-stopped
     env_file: .env
     environment:

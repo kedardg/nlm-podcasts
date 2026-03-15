@@ -192,9 +192,9 @@ The `nlm-auth` named volume persists auth tokens across container restarts.
 - [x] `docker-compose.yml` has `restart: unless-stopped` and healthcheck
 - [x] `RESEARCH.md` symlink replaced with copy (or direct mount in compose)
 - [x] `config/cron-jobs.json` updated with `/app/...` paths
-- [ ] `TOOLS.md` updated with `PROJECT_ROOT=/app`
+- [x] `TOOLS.md` updated with `PROJECT_ROOT=/app`
 - [x] `docker compose build` succeeds
-- [ ] `docker compose up -d` starts the daemon
+- [x] `docker compose up -d` starts the daemon
 - [ ] `docker compose exec ... nlm login` completes (manual, one-time)
 - [ ] Daily pipeline runs successfully inside Docker
 - [x] `docs/BUGS.md` updated with TCC bug entry
