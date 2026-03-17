@@ -10,5 +10,6 @@ requests
 websocket-client
 pydantic
 playwright
+ural
 mlx-lm
 pytest

@@ -15,7 +15,7 @@ services:
       - openclaw-home:/root/.openclaw
       - ~/.notebooklm-mcp-cli:/root/.notebooklm-mcp-cli
       # Read-only config from host
-      - ~/.openclaw/openclaw.json:/root/.openclaw/openclaw.json:ro
+      - ~/.openclaw/openclaw.json:/root/.openclaw/openclaw.json
       - ~/.config/openclaw-research:/root/.config/openclaw-research:ro
       # Workspace files — mounted individually to avoid accumulating artifacts
       - ~/.openclaw/workspace/TOOLS.md:/root/.openclaw/workspace/TOOLS.md:ro
