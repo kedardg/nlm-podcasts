@@ -8,6 +8,8 @@ services:
       - PROJECT_ROOT=/app
       - CHROME_PATH=/usr/bin/chromium
     volumes:
+      # .env file (pipeline scripts source this directly)
+      - ./.env:/app/.env:ro
       # Persistent data (bind mounts — host-editable)
       - ./data:/app/data
       - ./rag/chroma_db:/app/rag/chroma_db
