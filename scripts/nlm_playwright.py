@@ -78,6 +78,112 @@ def read_file_text(path):
     return None
 
 
+# ── NLM CLI auth sync ──────────────────────────────────────────
+
+NLM_CLI_PROFILE = Path.home() / ".notebooklm-mcp-cli" / "profiles" / "default"
+NLM_CLI_AUTH = Path.home() / ".notebooklm-mcp-cli" / "auth.json"
+
+
+def _cleanup_profile_locks(profile_dir=None):
+    """Remove stale Chrome lock files that prevent Playwright from launching.
+
+    Chrome writes these when running; if the process crashes they remain
+    and block subsequent launches with TargetClosedError.
+    """
+    pdir = Path(profile_dir or DEFAULT_PROFILE_DIR)
+    for lock_file in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+        p = pdir / lock_file
+        if p.exists() or p.is_symlink():
+            try:
+                p.unlink(missing_ok=True)
+                log(f"  Cleaned up stale lock: {lock_file}")
+            except OSError:
+                pass
+
+
+def _extract_session_tokens(page):
+    """Extract f.sid, csrf_token, and build_label from a live NLM page."""
+    try:
+        tokens = page.evaluate("""() => {
+            var scripts = document.querySelectorAll('script');
+            var f = '', c = '', b = '';
+            for (var s of scripts) {
+                var t = s.textContent, m;
+                if ((m = t.match(/FdrFJe":"([^"]+)"/))) f = m[1];
+                if ((m = t.match(/SNlM0e":"([^"]+)"/))) c = m[1];
+                if ((m = t.match(/cfb2h":"([^"]+)"/))) b = m[1];
+            }
+            return {fsid: f, csrf: c, bl: b};
+        }""")
+        return tokens
+    except Exception as e:
+        log(f"  Token extraction failed: {e}")
+        return {"fsid": "", "csrf": "", "bl": ""}
+
+
+def sync_cookies_to_nlm(browser_context, page):
+    """Sync Playwright cookies + session tokens to nlm CLI config.
+
+    Bridges the gap between Playwright's persistent profile and the nlm CLI's
+    cookie-based auth. Call after any successful NLM page load.
+    """
+    try:
+        # 1. Extract cookies from Playwright
+        cookies = browser_context.cookies()
+        google_cookies = [c for c in cookies if ".google.com" in c.get("domain", "")]
+
+        if len(google_cookies) < 5:
+            log(f"  Sync skipped: only {len(google_cookies)} Google cookies (need >=5)")
+            return False
+
+        # 2. Extract session tokens from the page
+        tokens = _extract_session_tokens(page)
+        if not tokens.get("fsid"):
+            log("  Sync skipped: could not extract session tokens from page")
+            return False
+
+        # 3. Write cookies.json (nlm CLI format: {name: value} dict)
+        NLM_CLI_PROFILE.mkdir(parents=True, exist_ok=True)
+        cookies_dict = {c["name"]: c["value"] for c in google_cookies}
+        cookies_path = NLM_CLI_PROFILE / "cookies.json"
+        cookies_path.write_text(json.dumps(cookies_dict, indent=2))
+        os.chmod(cookies_path, 0o600)
+
+        # 4. Write metadata.json
+        meta_path = NLM_CLI_PROFILE / "metadata.json"
+        meta = {}
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+        meta["csrf_token"] = tokens["csrf"]
+        meta["session_id"] = tokens["fsid"]
+        meta["build_label"] = tokens["bl"]
+        meta["last_validated"] = datetime.now(timezone.utc).isoformat()
+        meta_path.write_text(json.dumps(meta, indent=2))
+
+        # 5. Update auth.json cache
+        auth = {}
+        if NLM_CLI_AUTH.exists():
+            try:
+                auth = json.loads(NLM_CLI_AUTH.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+        auth["csrf_token"] = tokens["csrf"]
+        auth["session_id"] = tokens["fsid"]
+        auth["build_label"] = tokens["bl"]
+        auth["cookies"] = cookies_dict
+        NLM_CLI_AUTH.write_text(json.dumps(auth, indent=2))
+
+        log(f"  Synced {len(google_cookies)} cookies + tokens to nlm CLI")
+        return True
+
+    except Exception as e:
+        log(f"  Cookie sync failed: {e}")
+        return False
+
+
 def load_credentials():
     """Load Google credentials from config/google-credentials.json."""
     if not CREDENTIALS_PATH.exists():
@@ -219,6 +325,7 @@ def create_browser(headless=False, profile_dir=None):
 
     profile = str(profile_dir or DEFAULT_PROFILE_DIR)
     os.makedirs(profile, exist_ok=True)
+    _cleanup_profile_locks(profile)
 
     launch_kwargs = dict(
         user_data_dir=profile,
@@ -355,6 +462,7 @@ def do_interactive_login(headless=False, profile_dir=None):
     pw = sync_playwright().start()
     actual_profile = str(profile_dir or DEFAULT_PROFILE_DIR)
     os.makedirs(actual_profile, exist_ok=True)
+    _cleanup_profile_locks(actual_profile)
 
     log("Opening browser for Google login...")
     log("Log into your Google account in the browser window.")
@@ -394,6 +502,8 @@ def do_interactive_login(headless=False, profile_dir=None):
         log("Login successful! Session saved to browser profile.")
         log(f"Profile: {actual_profile}")
         log("You can now use --headless for automated runs.")
+        # Sync cookies to nlm CLI so both auth systems stay in sync
+        sync_cookies_to_nlm(browser, page)
     else:
         url = page.url
         log(f"WARNING: Timed out. Current URL: {url}")
@@ -401,6 +511,49 @@ def do_interactive_login(headless=False, profile_dir=None):
 
     browser.close()
     pw.stop()
+
+
+def do_sync_auth():
+    """Sync Playwright auth session to nlm CLI — headless, auto-login if needed.
+
+    Used by nlm_ensure_auth.sh as a recovery layer. Returns 0 on success, 1 on failure.
+    """
+    log("Syncing Playwright auth to nlm CLI...")
+
+    try:
+        pw, browser, page = create_browser(headless=True)
+    except Exception as e:
+        log(f"  Failed to launch browser: {e}")
+        return 1
+
+    try:
+        # Check if already logged in via persistent profile
+        if not ensure_login(page):
+            log("  Playwright session expired and auto-login failed")
+            browser.close()
+            pw.stop()
+            return 1
+
+        # We're on the NLM page — sync cookies to nlm CLI
+        if sync_cookies_to_nlm(browser, page):
+            log("  Auth sync complete")
+            browser.close()
+            pw.stop()
+            return 0
+        else:
+            log("  Auth sync failed (could not extract cookies/tokens)")
+            browser.close()
+            pw.stop()
+            return 1
+
+    except Exception as e:
+        log(f"  Sync auth error: {e}")
+        try:
+            browser.close()
+            pw.stop()
+        except Exception:
+            pass
+        return 1
 
 
 def create_notebook(page, title, record):
@@ -1351,6 +1504,9 @@ def run_workflow(args):
         if nb_id:
             print(f"NOTEBOOK_ID={nb_id}")
 
+        # Sync cookies to nlm CLI after successful workflow
+        sync_cookies_to_nlm(browser, page)
+
         return 0
 
     except Exception as e:
@@ -1412,6 +1568,8 @@ Examples:
     # Auth commands
     parser.add_argument("--login", action="store_true",
                         help="Interactive login: open headed browser for manual Google sign-in")
+    parser.add_argument("--sync-auth", action="store_true",
+                        help="Sync Playwright session cookies to nlm CLI (headless, auto-login if needed)")
 
     # Actions
     parser.add_argument("--create", metavar="TITLE",
@@ -1479,6 +1637,11 @@ def main():
             if pd:
                 profile_dir = Path(pd).expanduser()
         do_interactive_login(profile_dir=profile_dir)
+        return
+
+    # --sync-auth: headless session sync to nlm CLI
+    if args.sync_auth:
+        sys.exit(do_sync_auth())
         return
 
     # --test-login only checks session status — force headless (no interaction)

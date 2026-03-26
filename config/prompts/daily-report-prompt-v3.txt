@@ -25,23 +25,11 @@ This should read as editorial analysis, not a list of items.
 
 ### Descriptive Article Title
 **Source:** exact_source_url_here
-**TL;DR:** Single sentence capturing the core point.
-
-Write a thorough, self-contained analysis covering ALL of the following:
-
-1. WHAT: What was announced, published, released, or reported. Be specific.
-2. HOW: Technical details — architectures, methodologies, parameter counts, training approaches, system designs. Include specific numbers and comparisons.
-3. RESULTS: Quantitative outcomes — benchmarks, performance metrics, cost figures, efficiency gains. Use exact numbers from the source.
-4. WHY IT MATTERS: Implications for the field, industry, or practitioners. How does this shift the landscape?
-5. CONNECTIONS: How this relates to other items in today's briefing or to broader industry trends.
-
-Write in clear technical prose. Use **bold** for key terms, model names, and numbers. The reader should walk away understanding the key substance of this source completely.
+**Analysis:** Write a single dense paragraph (500-800 characters for notable items, 800+ for major items) that weaves together WHAT happened, HOW it works (technical details, architectures, numbers), KEY RESULTS (benchmarks, metrics, exact figures), WHY IT MATTERS (implications, landscape shift), and CONNECTIONS to other items in the briefing or broader trends. Use **bold** for key terms, model names, and numbers. The reader should fully understand this development without clicking through. Write with editorial voice — not a dry summary but an informed analysis that contextualizes the significance.
 
 ### Next Article Title
 **Source:** url
-**TL;DR:** ...
-
-Body text...
+**Analysis:** ...
 
 ## Tech Industry
 
@@ -68,12 +56,23 @@ Body text...
 3. Third insight...
 4. Fourth insight...
 
+---
+
+## Source Links
+
+List ALL source URLs from the notebook here, including sources that were NOT covered as individual articles (low-information items, duplicates, or items without enough substance for a full article). Format as a bulleted list:
+- [Descriptive title or link text](exact_url) *(category, origin)*
+- [Another source](url) *(category, origin)*
+
+This section ensures every source is discoverable even if it didn't warrant a full article above. Sources that DO have articles above should also appear here for easy reference.
+
 COVERAGE DEPTH:
-- Every article body MUST be at least 500 characters (roughly 5-8 sentences). Aim for 500-800 characters per article.
+- Every **Analysis:** paragraph MUST be at least 500 characters (roughly 5-8 sentences). Aim for 500-800 characters per article.
 - Major items (breakthroughs, large funding, flagship launches, influential papers): 800+ characters with full technical detail, methodology, results, and implications.
 - Notable items (significant developments): 500-800 characters covering key details, numbers, and why it matters.
-- If you cannot write at least 500 characters of SUBSTANTIVE content about a source (e.g., you only have a title and URL with no actual content), DO NOT create an article for it — skip it entirely. Do NOT write generic filler.
+- If you cannot write at least 500 characters of SUBSTANTIVE content about a source (e.g., you only have a title and URL with no actual content), DO NOT create an article for it — skip it entirely. Include it only in the Source Links section at the end.
 - Only create article entries for sources where you have enough information to write a meaningful, specific analysis.
+- Items skipped from articles MUST still appear in the ## Source Links section — no source should be lost.
 
 SECTION ASSIGNMENT RULES:
 - AI Research: Papers, preprints, technical research posts, model architectures, training methods, benchmarks

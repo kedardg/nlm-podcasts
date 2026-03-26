@@ -27,9 +27,11 @@ source "$SCRIPT_DIR/../config/env.sh" 2>/dev/null || {
 }
 
 PROJECT="$PROJECT_ROOT"
-WORKSPACE="$HOME/.openclaw/workspace"
 NLM="$HOME/.local/bin/nlm"
 VENV_PYTHON="$PROJECT/.venv/bin/python3"
+
+# Source Telegram Bot API helper
+source "$SCRIPT_DIR/telegram_send.sh"
 
 # --- Argument parsing ---
 
@@ -49,7 +51,17 @@ deliver_file() {
   local file="$1"
   local caption="$2"
   if [ -f "$file" ]; then
-    openclaw message send --channel telegram --target "$TELEGRAM_CHAT_ID" --media "$file" --message "$caption" 2>/dev/null
+    tg_send_file "$file" "$caption"
+    return $?
+  fi
+  return 1
+}
+
+deliver_audio() {
+  local file="$1"
+  local caption="$2"
+  if [ -f "$file" ]; then
+    tg_send_audio "$file" "$caption"
     return $?
   fi
   return 1
@@ -80,20 +92,14 @@ if [ "$CATEGORY" = "daily" ]; then
 
   DELIVERED=""
 
-  # Copy and deliver report
+  # Deliver report directly (no workspace copy needed)
   if [ -n "$REPORT_PATH" ] && [ -f "$REPORT_PATH" ]; then
-    cp "$REPORT_PATH" "$WORKSPACE/daily-feed.pdf" 2>/dev/null || cp "$REPORT_PATH" "$WORKSPACE/daily-feed.md" 2>/dev/null
-    if [ -f "$WORKSPACE/daily-feed.pdf" ]; then
-      deliver_file "$WORKSPACE/daily-feed.pdf" "Daily Tech Feed — $DATE" && DELIVERED="report"
-    elif [ -f "$WORKSPACE/daily-feed.md" ]; then
-      deliver_file "$WORKSPACE/daily-feed.md" "Daily Tech Feed — $DATE" && DELIVERED="report"
-    fi
+    deliver_file "$REPORT_PATH" "Daily Tech Feed — $DATE" && DELIVERED="report"
   fi
 
-  # Copy and deliver podcast
+  # Deliver podcast directly (sendAudio for inline player)
   if [ "$HAS_PODCAST" = "true" ] && [ -n "$PODCAST_PATH" ] && [ -f "$PODCAST_PATH" ]; then
-    cp "$PODCAST_PATH" "$WORKSPACE/daily-podcast.mp3"
-    deliver_file "$WORKSPACE/daily-podcast.mp3" "Daily Podcast — $DATE" && DELIVERED="$DELIVERED podcast"
+    deliver_audio "$PODCAST_PATH" "Daily Podcast — $DATE" && DELIVERED="$DELIVERED podcast"
   fi
 
   if [ -z "$DELIVERED" ]; then
@@ -136,23 +142,25 @@ SHARE_LINK=""
 if [ "$ARTIFACT" = "report" ] || [ "$ARTIFACT" = "both" ]; then
   if [ "$HAS_REPORT" = "true" ]; then
     echo "Downloading report..." >&2
-    if $NLM download report "$NB_REF" --output "$WORKSPACE/report.md" 2>/dev/null; then
+    TMPDIR=$(mktemp -d)
+    if $NLM download report "$NB_REF" --output "$TMPDIR/report.md" 2>/dev/null; then
       # Enhance report
       echo "Enhancing report..." >&2
-      $VENV_PYTHON "$PROJECT/scripts/enhance_report.py" --input "$WORKSPACE/report.md" >/dev/null 2>&1 || true
+      $VENV_PYTHON "$PROJECT/scripts/enhance_report.py" --input "$TMPDIR/report.md" >/dev/null 2>&1 || true
 
       # Convert to PDF
       echo "Converting to PDF..." >&2
       DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $VENV_PYTHON "$PROJECT/lib/pdf_renderer.py" \
-        --input "$WORKSPACE/report.md" --output "$WORKSPACE/report.pdf" >/dev/null 2>&1
+        --input "$TMPDIR/report.md" --output "$TMPDIR/report.pdf" >/dev/null 2>&1
 
       # Deliver PDF (fall back to .md)
-      if [ -f "$WORKSPACE/report.pdf" ]; then
-        deliver_file "$WORKSPACE/report.pdf" "Research Report — $NB_REF" && DELIVERED="report(PDF)"
+      if [ -f "$TMPDIR/report.pdf" ]; then
+        deliver_file "$TMPDIR/report.pdf" "Research Report — $NB_REF" && DELIVERED="report(PDF)"
       fi
-      if [ -z "$DELIVERED" ] && [ -f "$WORKSPACE/report.md" ]; then
-        deliver_file "$WORKSPACE/report.md" "Research Report — $NB_REF" && DELIVERED="report(MD)"
+      if [ -z "$DELIVERED" ] && [ -f "$TMPDIR/report.md" ]; then
+        deliver_file "$TMPDIR/report.md" "Research Report — $NB_REF" && DELIVERED="report(MD)"
       fi
+      rm -rf "$TMPDIR"
     else
       echo "  Report download failed" >&2
     fi
@@ -167,14 +175,17 @@ if [ "$ARTIFACT" = "podcast" ] || [ "$ARTIFACT" = "both" ]; then
   if [ "$HAS_PODCAST" = "true" ]; then
     echo "Downloading podcast..." >&2
     PYTHON="${PROJECT_ROOT:-.}/.venv/bin/python3"
-    if $PYTHON "${PROJECT_ROOT:-.}/scripts/nlm_download_audio.py" "$NB_REF" --output "$WORKSPACE/podcast-raw.mp4" 2>/dev/null && [ -s "$WORKSPACE/podcast-raw.mp4" ]; then
-      /opt/homebrew/bin/ffmpeg -y -i "$WORKSPACE/podcast-raw.mp4" -ac 1 -b:a 48k -ar 22050 "$WORKSPACE/podcast.mp3" 2>/dev/null
-      if [ -s "$WORKSPACE/podcast.mp3" ]; then
-        deliver_file "$WORKSPACE/podcast.mp3" "Podcast — $NB_REF" && DELIVERED="$DELIVERED podcast"
+    TMPDIR_POD=$(mktemp -d)
+    FFMPEG="/opt/homebrew/bin/ffmpeg"
+    [[ -x "$FFMPEG" ]] || FFMPEG="ffmpeg"
+    if $PYTHON "${PROJECT_ROOT:-.}/scripts/nlm_download_audio.py" "$NB_REF" --output "$TMPDIR_POD/podcast-raw.mp4" 2>/dev/null && [ -s "$TMPDIR_POD/podcast-raw.mp4" ]; then
+      $FFMPEG -y -i "$TMPDIR_POD/podcast-raw.mp4" -ac 1 -b:a 48k -ar 22050 "$TMPDIR_POD/podcast.mp3" 2>/dev/null
+      if [ -s "$TMPDIR_POD/podcast.mp3" ]; then
+        deliver_audio "$TMPDIR_POD/podcast.mp3" "Podcast — $NB_REF" && DELIVERED="$DELIVERED podcast"
       else
-        deliver_file "$WORKSPACE/podcast-raw.mp4" "Podcast — $NB_REF" && DELIVERED="$DELIVERED podcast"
+        deliver_file "$TMPDIR_POD/podcast-raw.mp4" "Podcast — $NB_REF" && DELIVERED="$DELIVERED podcast"
       fi
-      rm -f "$WORKSPACE/podcast-raw.mp4"
+      rm -rf "$TMPDIR_POD"
     else
       echo "  Podcast download failed" >&2
     fi

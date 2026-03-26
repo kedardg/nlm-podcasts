@@ -27,6 +27,9 @@ source "$PROJECT_ROOT/config/env.sh" 2>/dev/null || {
     fi
 }
 
+# Source Telegram Bot API helper
+source "$PROJECT_ROOT/scripts/telegram_send.sh"
+
 PYTHON="$PROJECT_ROOT/.venv/bin/python3"
 NLM="$HOME/.local/bin/nlm"
 FFMPEG="/opt/homebrew/bin/ffmpeg"
@@ -109,7 +112,7 @@ LOCKDIR="$PROJECT_ROOT/data/.pipeline.lock"
 if ! mkdir "$LOCKDIR" 2>/dev/null; then
     # Check if stale (older than 2 hours)
     if [[ -d "$LOCKDIR" ]]; then
-        LOCK_AGE=$(( $(date +%s) - $(stat -f %m "$LOCKDIR" 2>/dev/null || stat -c %Y "$LOCKDIR" 2>/dev/null || echo 0) ))
+        LOCK_AGE=$(( $(date +%s) - $(stat -c %Y "$LOCKDIR" 2>/dev/null || stat -f %m "$LOCKDIR" 2>/dev/null || echo 0) ))
         if [[ $LOCK_AGE -gt 7200 ]]; then
             log "WARNING: Removing stale lock (${LOCK_AGE}s old)"
             rmdir "$LOCKDIR" 2>/dev/null
@@ -164,12 +167,7 @@ if $PDF_ONLY; then
     # Still deliver what we have
     if [[ -f "$PDF_FILE" ]] && [[ -n "$TELEGRAM_CHAT_ID" ]]; then
         log "Delivering PDF via Telegram..."
-        WORKSPACE="$HOME/.openclaw/workspace"
-        mkdir -p "$WORKSPACE"
-        cp "$PDF_FILE" "$WORKSPACE/$DATE-report.pdf" 2>/dev/null
-        openclaw message send --channel telegram --target "$TELEGRAM_CHAT_ID" \
-            --media "$WORKSPACE/$DATE-report.pdf" \
-            --message "Daily Tech Feed — $DATE" 2>&1 && step_ok "telegram-pdf" || step_fail "telegram-pdf"
+        tg_send_file "$PDF_FILE" "Daily Tech Feed — $DATE" 2>&1 && step_ok "telegram-pdf" || step_fail "telegram-pdf"
     fi
     log "=== Pipeline Complete (PDF only) ==="
     exit 0
@@ -196,11 +194,14 @@ if $USE_PLAYWRIGHT && ! $SKIP_NLM; then
     # Add URL sources
     URLS=$($PYTHON -c "
 import json
+from datetime import datetime, timedelta
 sources = json.load(open('$PROJECT_ROOT/data/sources.json'))
-today = '$DATE'
+dt = datetime.strptime('$DATE', '%Y-%m-%d')
+valid = [(dt - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(2)]
 urls = []
 for s in sources.get('sources', []):
-    if s.get('added_at', '').startswith(today) and s.get('url'):
+    added = s.get('added_at', '')
+    if any(added.startswith(d) for d in valid) and s.get('url'):
         urls.append(s['url'])
 seen = set()
 for u in urls:
@@ -345,12 +346,14 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
     # Collect top URLs from today's feed (max 15)
     URLS=$($PYTHON -c "
 import json, sys
-from datetime import datetime
+from datetime import datetime, timedelta
 sources = json.load(open('$PROJECT_ROOT/data/sources.json'))
-today = '$DATE'
+dt = datetime.strptime('$DATE', '%Y-%m-%d')
+valid = [(dt - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(2)]
 urls = []
 for s in sources.get('sources', []):
-    if s.get('added_at', '').startswith(today) and s.get('url'):
+    added = s.get('added_at', '')
+    if any(added.startswith(d) for d in valid) and s.get('url'):
         urls.append(s['url'])
 # Deduplicate, limit to 15
 seen = set()
@@ -486,9 +489,29 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
         log "  Podcast already downloaded: $PODCAST_RAW"
         step_ok "podcast-download (cached)"
     else
-        # Primary: CDP (fast, uses Chrome session)
-        $PYTHON "$PROJECT_ROOT/scripts/nlm_download_audio.py" "$NOTEBOOK_ID" --output "$PODCAST_RAW" 2>&1
-        # Fallback: Playwright (works without Chrome CDP)
+        # Wait for audio to be ready (poll up to 10 min with 30s intervals)
+        AUDIO_WAIT=0
+        AUDIO_MAX=600
+        while [[ $AUDIO_WAIT -lt $AUDIO_MAX ]]; do
+            ensure_auth_or_rotate || true
+            AUDIO_STATUS=$($NLM studio status "$NOTEBOOK_ID" 2>&1)
+            if echo "$AUDIO_STATUS" | grep -q '"type": "audio"' && echo "$AUDIO_STATUS" | grep -A2 '"type": "audio"' | grep -q '"status": "completed"'; then
+                log "  Audio ready (waited ${AUDIO_WAIT}s)"
+                break
+            fi
+            log "  Audio not ready yet... (${AUDIO_WAIT}s elapsed)"
+            sleep 30
+            AUDIO_WAIT=$((AUDIO_WAIT + 30))
+        done
+
+        # Primary: nlm CLI (fixed in nlm 0.4.9+)
+        $NLM download audio "$NOTEBOOK_ID" --output "$PODCAST_RAW" 2>&1
+        # Fallback 1: CDP (uses Chrome session cookies)
+        if [[ ! -s "$PODCAST_RAW" ]]; then
+            log "  nlm download failed — trying CDP..."
+            $PYTHON "$PROJECT_ROOT/scripts/nlm_download_audio.py" "$NOTEBOOK_ID" --output "$PODCAST_RAW" 2>&1
+        fi
+        # Fallback 2: Playwright (works without Chrome CDP)
         if [[ ! -s "$PODCAST_RAW" ]]; then
             log "  CDP download failed — falling back to Playwright..."
             ensure_auth_or_rotate || true
@@ -540,9 +563,6 @@ log "Step 8: Deliver via Telegram"
 if [[ -z "$TELEGRAM_CHAT_ID" ]]; then
     step_fail "telegram (no TELEGRAM_CHAT_ID)"
 else
-    WORKSPACE="$HOME/.openclaw/workspace"
-    mkdir -p "$WORKSPACE"
-
     # Count items in the feed
     ITEM_COUNT=0
     if [[ -f "$MD_FILE" ]]; then
@@ -558,8 +578,7 @@ $ITEM_COUNT items collected"
     [[ -n "$SHARE_LINK" ]] && SUMMARY_MSG="$SUMMARY_MSG
 Notebook: $SHARE_LINK"
 
-    openclaw message send --channel telegram --target "$TELEGRAM_CHAT_ID" \
-        --message "$SUMMARY_MSG" 2>&1 && step_ok "telegram-summary" || step_fail "telegram-summary"
+    tg_send_message "$SUMMARY_MSG" 2>&1 && step_ok "telegram-summary" || step_fail "telegram-summary"
 
     # Message 2: PDF report (prefer magazine/plain PDF > NLM report PDF)
     # Note: --magazine writes to $PDF_FILE (same as plain), not a separate file
@@ -571,19 +590,13 @@ Notebook: $SHARE_LINK"
     fi
 
     if [[ -n "$DELIVER_PDF" ]]; then
-        cp "$DELIVER_PDF" "$WORKSPACE/$DATE-report.pdf"
-        openclaw message send --channel telegram --target "$TELEGRAM_CHAT_ID" \
-            --media "$WORKSPACE/$DATE-report.pdf" \
-            --message "Daily Feed Report — $DATE" 2>&1 && \
+        tg_send_file "$DELIVER_PDF" "Daily Feed Report — $DATE" 2>&1 && \
             step_ok "telegram-pdf" || step_fail "telegram-pdf"
     fi
 
-    # Message 3: Podcast
+    # Message 3: Podcast (sendAudio for inline player)
     if [[ -f "$PODCAST" ]]; then
-        cp "$PODCAST" "$WORKSPACE/$DATE-podcast.mp3"
-        openclaw message send --channel telegram --target "$TELEGRAM_CHAT_ID" \
-            --media "$WORKSPACE/$DATE-podcast.mp3" \
-            --message "Daily Feed Podcast — $DATE" 2>&1 && \
+        tg_send_audio "$PODCAST" "Daily Feed Podcast — $DATE" 2>&1 && \
             step_ok "telegram-podcast" || step_fail "telegram-podcast"
     fi
 fi

@@ -24,6 +24,9 @@ source "$PROJECT_ROOT/config/env.sh" 2>/dev/null || {
     fi
 }
 
+# Source Telegram Bot API helper
+source "$PROJECT_ROOT/scripts/telegram_send.sh"
+
 PYTHON="$PROJECT_ROOT/.venv/bin/python3"
 NLM="$HOME/.local/bin/nlm"
 DATE=$(date +%Y-%m-%d)
@@ -71,7 +74,7 @@ LOCKDIR="$PROJECT_ROOT/data/.pipeline.lock"
 if ! mkdir "$LOCKDIR" 2>/dev/null; then
     # Check if stale (older than 2 hours)
     if [[ -d "$LOCKDIR" ]]; then
-        LOCK_AGE=$(( $(date +%s) - $(stat -f %m "$LOCKDIR" 2>/dev/null || stat -c %Y "$LOCKDIR" 2>/dev/null || echo 0) ))
+        LOCK_AGE=$(( $(date +%s) - $(stat -c %Y "$LOCKDIR" 2>/dev/null || stat -f %m "$LOCKDIR" 2>/dev/null || echo 0) ))
         if [[ $LOCK_AGE -gt 7200 ]]; then
             log "WARNING: Removing stale lock (${LOCK_AGE}s old)"
             rmdir "$LOCKDIR" 2>/dev/null
@@ -385,11 +388,30 @@ else
     MANIFEST="$PROJECT_ROOT/data/content-processor-output.json"
     if [[ -f "$PROJECT_ROOT/data/notebooks.json" ]]; then
         $PYTHON -c "
-import json, subprocess, os, time, shutil
+import json, subprocess, os, time
 
 project = '$PROJECT_ROOT'
 nlm = '$NLM'
 chat_id = '$TELEGRAM_CHAT_ID'
+bot_token = '$TELEGRAM_BOT_TOKEN'
+
+def tg_send(method, file_path, field, caption):
+    \"\"\"Send file via Telegram Bot API using curl.\"\"\"
+    if not (chat_id and bot_token):
+        return False
+    try:
+        r = subprocess.run([
+            'curl', '-s', '-w', '\\n%{http_code}',
+            '-X', 'POST', f'https://api.telegram.org/bot{bot_token}/{method}',
+            '-F', f'chat_id={chat_id}',
+            '-F', f'{field}=@{file_path}',
+            '-F', f'caption={caption}',
+        ], capture_output=True, text=True, timeout=120)
+        http_code = r.stdout.strip().split('\\n')[-1]
+        return http_code.startswith('2')
+    except Exception as e:
+        print(f'  Telegram error: {e}')
+        return False
 notebooks = json.load(open(f'{project}/data/notebooks.json'))
 
 # Get recently created notebooks (from this run)
@@ -473,30 +495,19 @@ for nb in recent:
                    '--notebook-id', nb['id']],
                   capture_output=True, text=True, timeout=60)
 
-    # Send via Telegram
-    if chat_id:
-        # Send podcast
-        if os.path.exists(podcast):
-            workspace_podcast = os.path.expanduser(f'~/.openclaw/workspace/{slug}-podcast.mp3')
-            os.makedirs(os.path.dirname(workspace_podcast), exist_ok=True)
-            import shutil
-            shutil.copy2(podcast, workspace_podcast)
-            subprocess.run(['openclaw', 'message', 'send', '--channel', 'telegram',
-                          '--target', chat_id, '--media', workspace_podcast,
-                          '--message', f'🎙️ {nb[\"category_name\"]} Podcast'],
-                         capture_output=True, text=True, timeout=30)
+    # Send via Telegram (direct Bot API via curl)
+    if os.path.exists(podcast):
+        if tg_send('sendAudio', podcast, 'audio', f'{nb[\"category_name\"]} Podcast'):
             print(f'  Telegram: podcast sent')
+        else:
+            print(f'  Telegram: podcast failed')
 
-        # Send report PDF
-        report_pdf = f'{project}/data/{slug}-report.pdf'
-        if os.path.exists(report_pdf):
-            workspace_report = os.path.expanduser(f'~/.openclaw/workspace/{slug}-report.pdf')
-            shutil.copy2(report_pdf, workspace_report)
-            subprocess.run(['openclaw', 'message', 'send', '--channel', 'telegram',
-                          '--target', chat_id, '--media', workspace_report,
-                          '--message', f'📄 {nb[\"category_name\"]} Report'],
-                         capture_output=True, text=True, timeout=30)
+    report_pdf = f'{project}/data/{slug}-report.pdf'
+    if os.path.exists(report_pdf):
+        if tg_send('sendDocument', report_pdf, 'document', f'{nb[\"category_name\"]} Report'):
             print(f'  Telegram: report sent')
+        else:
+            print(f'  Telegram: report failed')
 
     # Update notebook status
     nb['status'] = 'complete'

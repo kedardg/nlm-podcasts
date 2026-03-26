@@ -18,7 +18,7 @@ fi
 
 MSG="$1"
 
-openclaw message send \
-  --channel telegram \
-  --target "$TELEGRAM_CHAT_ID" \
-  --message "$MSG" 2>/dev/null || echo "alert: failed to send Telegram notification" >&2
+# Source Telegram Bot API helper
+source "$SCRIPT_DIR/telegram_send.sh"
+
+tg_send_message "$MSG" || echo "alert: failed to send Telegram notification" >&2

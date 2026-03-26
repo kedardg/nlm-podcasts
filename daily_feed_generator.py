@@ -88,7 +88,7 @@ def load_categories():
 
 
 def collect_today_items(target_date):
-    """Collect all items from today across sources.json and news-queue.json.
+    """Collect all queued items from the last 2 days.
 
     Args:
         target_date: date string YYYY-MM-DD
@@ -99,11 +99,15 @@ def collect_today_items(target_date):
     """
     items = []
 
+    # Include items from today and yesterday (2-day window)
+    dt = datetime.strptime(target_date, "%Y-%m-%d")
+    valid_dates = [(dt - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(2)]
+
     # 1. Collect from sources.json (research, github, youtube)
     sources = load_json(SOURCES_FILE)
     for src in sources.get("sources", []):
         added = src.get("added_at", "")
-        if not added.startswith(target_date):
+        if not any(added.startswith(d) for d in valid_dates):
             continue
         if src.get("status") not in ("queued", "processing"):
             continue
@@ -122,7 +126,7 @@ def collect_today_items(target_date):
     news_queue = load_json(NEWS_QUEUE_FILE)
     for article in news_queue.get("articles", []):
         extracted = article.get("extracted_at", "")
-        if not extracted.startswith(target_date):
+        if not any(extracted.startswith(d) for d in valid_dates):
             continue
         if article.get("status") not in ("queued",):
             continue

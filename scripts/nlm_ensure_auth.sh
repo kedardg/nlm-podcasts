@@ -3,7 +3,8 @@
 #   1. Quick auth check (fast — just tests cached credentials)
 #   2. Cookie rotation via RotateCookies endpoint (no browser needed)
 #   3. CDP extraction from running Chrome (if rotation fails)
-#   4. Full nlm login (launches Chrome headless with saved profile)
+#   4. nlm login (connects to Chrome CDP if running)
+#   5. Playwright sync (launch headless Playwright, sync cookies to nlm CLI)
 #
 # Usage: ./nlm_ensure_auth.sh
 # Exit 0 = auth is valid
@@ -20,6 +21,7 @@ source "$SCRIPT_DIR/../config/env.sh" 2>/dev/null || {
 NLM="$HOME/.local/bin/nlm"
 PYTHON="$PROJECT_ROOT/.venv/bin/python3"
 ROTATE_SCRIPT="$PROJECT_ROOT/scripts/nlm_rotate_cookies.py"
+PLAYWRIGHT_SCRIPT="$PROJECT_ROOT/scripts/nlm_playwright.py"
 
 # Check if nlm exists
 if [ ! -f "$NLM" ]; then
@@ -55,24 +57,29 @@ if [ -f "$ROTATE_SCRIPT" ]; then
   echo "nlm auth: CDP extraction failed, trying next layer..."
 fi
 
-# ── Layer 4: Full nlm login (headless Chrome with saved profile) ──
-MAX_RETRIES=2
-BASE_DELAY=5
-attempt=1
-while [ $attempt -le $MAX_RETRIES ]; do
-  delay=$(( BASE_DELAY * (2 ** (attempt - 1)) ))
-  echo "nlm auth: trying nlm login, attempt $attempt/$MAX_RETRIES (waiting ${delay}s)..."
-  sleep "$delay"
+# ── Layer 4: nlm login (connects to Chrome CDP if running) ──
+echo "nlm auth: trying nlm login..."
+if $NLM login 2>&1; then
+  if $NLM login --check >/dev/null 2>&1; then
+    echo "nlm auth: recovered via nlm login"
+    exit 0
+  fi
+fi
+echo "nlm auth: nlm login failed, trying next layer..."
 
-  if $NLM login 2>&1; then
+# ── Layer 5: Playwright sync (headless browser + auto-login from credentials) ──
+if [ -f "$PLAYWRIGHT_SCRIPT" ]; then
+  echo "nlm auth: trying Playwright auth sync..."
+  if $PYTHON "$PLAYWRIGHT_SCRIPT" --sync-auth 2>&1; then
+    # Verify nlm CLI can use the synced cookies
     if $NLM login --check >/dev/null 2>&1; then
-      echo "nlm auth: refreshed via nlm login on attempt $attempt"
+      echo "nlm auth: recovered via Playwright sync"
       exit 0
     fi
+    echo "nlm auth: Playwright sync succeeded but nlm check still fails"
   fi
-
-  attempt=$((attempt + 1))
-done
+  echo "nlm auth: Playwright sync failed"
+fi
 
 # ── All recovery attempts failed ──
 echo "ERROR: nlm auth failed after all recovery attempts"
@@ -83,21 +90,19 @@ NotebookLM auth failed
 All recovery layers exhausted:
 1. Cookie rotation (RotateCookies endpoint)
 2. CDP extraction from Chrome
-3. Headless nlm login (2 attempts)
+3. nlm login (Chrome CDP)
+4. Playwright auth sync (headless + auto-login)
 
 To fix:
-1. Open Chrome and log in to notebooklm.google.com
-2. Run: ~/.local/bin/nlm login
-3. Re-trigger: openclaw cron run daily-tech-feed
+1. Run: .venv/bin/python3 scripts/nlm_playwright.py --login
+2. Or: open Chrome, log in to notebooklm.google.com, then run ~/.local/bin/nlm login
 
 NLM-dependent steps will be skipped.
 ALERT
 )"
 
-# Try to send alert — don't fail if this also fails
-openclaw message send \
-  --channel telegram \
-  --target "$TELEGRAM_CHAT_ID" \
-  --message "$ALERT_MSG" 2>/dev/null || true
+# Try to send alert via direct Bot API — don't fail if this also fails
+source "$SCRIPT_DIR/telegram_send.sh"
+tg_send_message "$ALERT_MSG" 2>/dev/null || true
 
 exit 1

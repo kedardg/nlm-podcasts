@@ -23,6 +23,7 @@ Exit codes:
 """
 
 import json
+import os
 import sys
 import time
 from datetime import datetime
@@ -175,26 +176,39 @@ def extract_cookies_via_cdp() -> dict[str, str] | None:
     debugger_url = None
     nlm_ws_url = None
 
-    for port in CDP_PORTS:
-        try:
-            resp = httpx.get(f"http://127.0.0.1:{port}/json/version", timeout=2)
-            debugger_url = resp.json().get("webSocketDebuggerUrl")
-            # Find NLM tab
-            pages = httpx.get(f"http://127.0.0.1:{port}/json", timeout=2).json()
-            for page in pages:
-                if "notebooklm.google.com" in page.get("url", ""):
-                    nlm_ws_url = page.get("webSocketDebuggerUrl")
-                    break
-            # If no NLM tab, use any Google tab
-            if not nlm_ws_url:
+    # Try localhost first, then host.docker.internal (for Docker containers
+    # reaching the host's Chrome). The ws:// URL from /json uses the same host.
+    cdp_hosts = ["127.0.0.1"]
+    if os.environ.get("PROJECT_ROOT") == "/app":
+        # Running inside Docker — also try the host machine
+        cdp_hosts.append("host.docker.internal")
+
+    for host in cdp_hosts:
+        for port in CDP_PORTS:
+            try:
+                resp = httpx.get(f"http://{host}:{port}/json/version", timeout=2)
+                debugger_url = resp.json().get("webSocketDebuggerUrl")
+                # Find NLM tab
+                pages = httpx.get(f"http://{host}:{port}/json", timeout=2).json()
                 for page in pages:
-                    if "google.com" in page.get("url", ""):
+                    if "notebooklm.google.com" in page.get("url", ""):
                         nlm_ws_url = page.get("webSocketDebuggerUrl")
                         break
-            if nlm_ws_url:
-                break
-        except Exception:
-            continue
+                # If no NLM tab, use any Google tab
+                if not nlm_ws_url:
+                    for page in pages:
+                        if "google.com" in page.get("url", ""):
+                            nlm_ws_url = page.get("webSocketDebuggerUrl")
+                            break
+                # Fix ws:// URL to use the reachable host (not 127.0.0.1 from inside Docker)
+                if nlm_ws_url and host != "127.0.0.1":
+                    nlm_ws_url = nlm_ws_url.replace("127.0.0.1", host).replace("localhost", host)
+                if nlm_ws_url:
+                    break
+            except Exception:
+                continue
+        if nlm_ws_url:
+            break
 
     if not nlm_ws_url:
         return None
