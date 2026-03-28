@@ -1,0 +1,712 @@
+/* Daily Tech Feed — Magazine-Style PDF Stylesheet */
+
+@page {
+  size: A4 portrait;
+  margin: 16mm 14mm 16mm 14mm;
+  @top-left {
+    content: string(section-name, first);
+    font-size: 7pt;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: #999;
+  }
+  @top-right {
+    content: "Weekly Research Digest";
+    font-size: 7pt;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: #999;
+  }
+  @bottom-center {
+    content: counter(page);
+    font-size: 7pt;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: #999;
+  }
+}
+
+@page :first {
+  @top-left { content: none; }
+  @top-right { content: none; }
+  @bottom-center { content: none; }
+}
+
+/* ── Base Typography ── */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-size: 10pt;
+  line-height: 1.5;
+  color: #1a1a1a;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Magazine Header ── */
+.mag-header {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  color: #fff;
+  margin: -16mm -14mm 0 -14mm;
+  padding: 14mm 14mm 10mm 14mm;
+}
+
+.mag-date {
+  font-size: 8pt;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 1.5pt;
+  margin-bottom: 4pt;
+}
+
+.mag-title {
+  font-size: 24pt;
+  font-weight: 800;
+  margin: 0;
+  padding: 0;
+  line-height: 1.1;
+  color: #fff;
+  background: none;
+}
+
+.mag-subtitle {
+  font-size: 9pt;
+  color: #94a3b8;
+  margin-top: 4pt;
+}
+
+/* ── Headline Banner ── */
+.mag-headline {
+  background: #f8fafc;
+  border-left: 4pt solid #3b82f6;
+  padding: 10pt 12pt;
+  margin: 12pt 0;
+  font-size: 10pt;
+  line-height: 1.5;
+  color: #334155;
+}
+
+/* ── Section Container ── */
+.mag-section {
+  margin: 14pt 0 8pt 0;
+}
+
+.mag-section-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8pt;
+  border-bottom: 2pt solid var(--section-accent, #374151);
+  padding-bottom: 4pt;
+  margin-bottom: 8pt;
+}
+
+.mag-section-header h2 {
+  font-size: 14pt;
+  font-weight: 700;
+  color: var(--section-accent, #374151);
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.mag-item-count {
+  font-size: 8pt;
+  color: #9ca3af;
+  font-weight: 400;
+}
+
+/* ── Section Synthesis ── */
+.mag-synthesis {
+  background: var(--section-bg, #f3f4f6);
+  padding: 8pt 10pt;
+  margin-bottom: 8pt;
+  font-size: 9pt;
+  line-height: 1.55;
+  color: #374151;
+  border-radius: 4pt;
+}
+
+/* ── Card Grids ── */
+.mag-featured-grid {
+  margin-bottom: 8pt;
+}
+
+.mag-standard-grid {
+  columns: 2;
+  column-gap: 12pt;
+  column-rule: 0.5pt solid #e5e7eb;
+  margin-bottom: 6pt;
+}
+
+/* ── Cards ── */
+.mag-card {
+  border: 1pt solid #e5e7eb;
+  border-radius: 4pt;
+  padding: 8pt 10pt;
+  margin-bottom: 6pt;
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+.mag-card-featured {
+  border-left: 3pt solid var(--section-accent, #3b82f6);
+  background: #fafbfc;
+}
+
+.mag-card-standard {
+  border-left: 2pt solid #e5e7eb;
+  background: #fff;
+}
+
+.mag-card-tag {
+  font-size: 7pt;
+  color: var(--section-accent, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+  margin-bottom: 2pt;
+  font-weight: 600;
+}
+
+.mag-card-title {
+  font-size: 10pt;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 3pt;
+  line-height: 1.3;
+}
+
+.mag-card-title a {
+  color: #111827;
+  text-decoration: none;
+}
+
+.mag-card-featured .mag-card-title {
+  font-size: 11pt;
+}
+
+.mag-card-summary {
+  font-family: Charter, Georgia, "Times New Roman", Times, serif;
+  font-size: 8.4pt;
+  color: #4b5563;
+  line-height: 1.5;
+  margin-bottom: 3pt;
+}
+
+.mag-card-source {
+  font-size: 7.5pt;
+  margin-top: 2pt;
+  color: #9ca3af;
+}
+
+/* ── Compact List (low significance) ── */
+.mag-compact-list {
+  border-top: 1pt solid #f3f4f6;
+  padding-top: 4pt;
+  margin-bottom: 6pt;
+  columns: 2;
+  column-gap: 10pt;
+}
+
+.mag-compact-item {
+  font-size: 8pt;
+  color: #6b7280;
+  padding: 2pt 0;
+  line-height: 1.35;
+  break-inside: avoid;
+}
+
+.mag-compact-item a {
+  color: #6b7280;
+  text-decoration: none;
+}
+
+.mag-compact-more {
+  font-style: italic;
+  color: #9ca3af;
+}
+
+/* ── Key Takeaways ── */
+.mag-takeaways {
+  background: #fffbeb;
+  border: 1pt solid #fbbf24;
+  border-radius: 4pt;
+  padding: 10pt 12pt;
+  margin: 14pt 0 8pt 0;
+  page-break-inside: avoid;
+}
+
+.mag-takeaways h2 {
+  font-size: 12pt;
+  font-weight: 700;
+  color: #92400e;
+  margin: 0 0 6pt 0;
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.mag-takeaways ol {
+  margin: 0;
+  padding-left: 16pt;
+}
+
+.mag-takeaways li {
+  font-size: 9pt;
+  line-height: 1.5;
+  margin-bottom: 5pt;
+  color: #78350f;
+}
+
+/* ── Article Layout (article-first format) ── */
+.mag-article {
+  margin: 10pt 0;
+  padding: 10pt 0;
+  border-bottom: 0.5pt solid #e5e7eb;
+}
+
+.mag-article:last-of-type {
+  border-bottom: none;
+}
+
+.mag-article-title {
+  font-size: 12pt;
+  font-weight: 700;
+  margin: 0 0 2pt;
+  line-height: 1.3;
+  color: #111827;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.mag-article-title a {
+  color: #111827;
+  text-decoration: none;
+}
+
+.mag-article-source {
+  font-size: 8pt;
+  color: #9ca3af;
+  margin-bottom: 4pt;
+}
+
+.mag-article-tldr {
+  font-size: 9pt;
+  color: #374151;
+  background: #f8fafc;
+  border-left: 3pt solid var(--section-accent, #3b82f6);
+  padding: 4pt 8pt;
+  margin: 4pt 0 6pt;
+  line-height: 1.4;
+}
+
+.mag-article-text {
+  font-size: 9.5pt;
+  line-height: 1.55;
+  color: #1f2937;
+  margin: 4pt 0;
+}
+
+.mag-article-list {
+  font-size: 9.5pt;
+  line-height: 1.55;
+  color: #1f2937;
+  margin: 4pt 0 4pt 16pt;
+  padding: 0;
+}
+
+.mag-article-list li {
+  margin: 2pt 0;
+}
+
+/* ── Briefs (thin articles — title + TL;DR) ── */
+.mag-briefs {
+  margin-top: 10pt;
+  padding-top: 8pt;
+  border-top: 1pt solid var(--section-accent, #e5e7eb);
+}
+
+.mag-briefs-label {
+  font-size: 10pt;
+  font-weight: 700;
+  color: var(--section-accent, #374151);
+  margin-bottom: 6pt;
+}
+
+.mag-brief-item {
+  margin-bottom: 6pt;
+  padding-bottom: 5pt;
+  border-bottom: 0.5pt solid #f3f4f6;
+}
+
+.mag-brief-item:last-child {
+  border-bottom: none;
+}
+
+.mag-brief-title {
+  font-size: 9.5pt;
+  font-weight: 600;
+  margin-bottom: 2pt;
+}
+
+.mag-brief-title a {
+  color: #111827;
+  text-decoration: none;
+}
+
+.mag-brief-text {
+  font-size: 8.5pt;
+  color: #4b5563;
+  line-height: 1.45;
+}
+
+/* ── Reference List (items without article content) ── */
+.mag-references {
+  margin-top: 8pt;
+  padding-top: 6pt;
+  border-top: 0.5pt solid #e5e7eb;
+}
+
+.mag-ref-label {
+  font-size: 8pt;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+  color: #9ca3af;
+  font-weight: 600;
+  margin-bottom: 4pt;
+}
+
+.mag-ref-item {
+  font-size: 8.5pt;
+  color: #4b5563;
+  margin: 1pt 0;
+}
+
+.mag-ref-item a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.mag-ref-domain {
+  color: #9ca3af;
+  font-size: 7.5pt;
+}
+
+.mag-ref-more {
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* ── Avoid orphaning article titles ── */
+.mag-article-title, .mag-article-tldr {
+  page-break-after: avoid;
+}
+
+/* ── Footer ── */
+.mag-footer {
+  font-size: 7pt;
+  color: #9ca3af;
+  text-align: center;
+  margin-top: 12pt;
+  padding-top: 6pt;
+  border-top: 1pt solid #e5e7eb;
+}
+
+/* ── Links ── */
+a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+/* ── Bold ── */
+strong {
+  font-weight: 600;
+}
+
+/* ── Avoid page breaks in awkward places ── */
+.mag-card, .mag-section-header, .mag-takeaways {
+  page-break-inside: avoid;
+}
+
+.mag-section-header {
+  page-break-after: avoid;
+}
+
+/* ══════════════════════════════════════════════
+   Magazine v2 — Redesign-specific styles
+   Front page, pills, badges, significance bars
+   ══════════════════════════════════════════════ */
+
+/* ── Front Page ── */
+.mag-v2-front-page {
+  page-break-after: always;
+}
+
+.mag-v2-editorial {
+  font-family: Charter, Georgia, "Times New Roman", Times, serif;
+  font-size: 10pt;
+  line-height: 1.6;
+  color: #374151;
+  margin: 12pt 0;
+  padding: 10pt 14pt;
+  background: #f8fafc;
+  border-radius: 4pt;
+}
+
+.mag-v2-editorial p {
+  margin: 0;
+}
+
+.mag-v2-top-stories {
+  margin: 14pt 0 12pt 0;
+}
+
+.mag-v2-top-stories h2 {
+  font-size: 12pt;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0 0 8pt 0;
+  padding: 0;
+  background: none;
+  border: none;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+}
+
+.mag-v2-top-story {
+  padding: 6pt 0;
+  border-bottom: 0.5pt solid #e5e7eb;
+  line-height: 1.45;
+}
+
+.mag-v2-top-story:last-child {
+  border-bottom: none;
+}
+
+.mag-v2-top-story strong {
+  font-size: 10pt;
+  color: #111827;
+}
+
+.mag-v2-top-story a {
+  color: #111827;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 10pt;
+}
+
+.mag-v2-top-story-summary {
+  font-family: Charter, Georgia, "Times New Roman", Times, serif;
+  font-size: 8.4pt;
+  color: #6b7280;
+  margin-top: 2pt;
+}
+
+/* ── Section Navigator ── */
+.mag-v2-navigator {
+  margin-top: 14pt;
+  padding: 10pt 12pt;
+  background: #f1f5f9;
+  border-radius: 4pt;
+}
+
+.mag-v2-navigator h2 {
+  font-size: 10pt;
+  font-weight: 700;
+  color: #475569;
+  margin: 0 0 6pt 0;
+  padding: 0;
+  background: none;
+  border: none;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+}
+
+.mag-v2-nav-item {
+  padding: 3pt 0;
+  font-size: 9pt;
+  line-height: 1.4;
+}
+
+.mag-v2-nav-dot {
+  display: inline-block;
+  width: 8pt;
+  height: 8pt;
+  border-radius: 4pt;
+  margin-right: 4pt;
+  vertical-align: middle;
+}
+
+.mag-v2-nav-item strong {
+  font-size: 9pt;
+  color: #1e293b;
+}
+
+.mag-v2-nav-count {
+  font-size: 7pt;
+  color: #9ca3af;
+}
+
+.mag-v2-nav-preview {
+  font-family: Charter, Georgia, "Times New Roman", Times, serif;
+  font-size: 8pt;
+  color: #64748b;
+}
+
+/* ── Source Domain Pills ── */
+.mag-v2-pill {
+  display: inline-block;
+  font-size: 6pt;
+  font-weight: 600;
+  color: #fff;
+  padding: 1pt 5pt;
+  border-radius: 2pt;
+  text-transform: uppercase;
+  letter-spacing: 0.3pt;
+  vertical-align: middle;
+  line-height: 1.4;
+}
+
+/* ── Content Type Badges ── */
+.mag-v2-badge {
+  display: inline-block;
+  font-size: 6pt;
+  font-weight: 600;
+  padding: 1pt 4pt;
+  border-radius: 2pt;
+  text-transform: uppercase;
+  letter-spacing: 0.5pt;
+  vertical-align: middle;
+  margin-left: 3pt;
+}
+
+.mag-v2-badge--research { background: #dbeafe; color: #1e40af; }
+.mag-v2-badge--news { background: #fce7f3; color: #9d174d; }
+.mag-v2-badge--blog { background: #dcfce7; color: #166534; }
+.mag-v2-badge--tool { background: #e0e7ff; color: #3730a3; }
+
+/* ── Significance Bars ── */
+.mag-v2-sig-bars {
+  display: inline-flex;
+  gap: 1.5pt;
+  vertical-align: middle;
+  margin-left: 4pt;
+}
+
+.mag-v2-sig-bar {
+  display: inline-block;
+  width: 5pt;
+  height: 8pt;
+  border-radius: 1pt;
+}
+
+.mag-v2-sig-bar--filled {
+  background: var(--section-accent, #374151);
+}
+
+.mag-v2-sig-bar--empty {
+  background: #e5e7eb;
+}
+
+/* ── Card Meta Row ── */
+.mag-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 3pt;
+  margin-bottom: 3pt;
+  flex-wrap: wrap;
+}
+
+/* ── Section Synthesis — serif for reading ── */
+.mag-synthesis {
+  font-family: Charter, Georgia, "Times New Roman", Times, serif;
+}
+
+/* ──────────────────────────────────────────────
+   Legacy support: plain markdown daily feed
+   (when rendered without magazine HTML wrapper)
+   ────────────────────────────────────────────── */
+
+h1 {
+  font-size: 20pt;
+  font-weight: 700;
+  color: #fff;
+  background: #1a1a2e;
+  margin: -16mm -14mm 12pt -14mm;
+  padding: 14mm 14mm 10mm 14mm;
+  line-height: 1.2;
+}
+
+blockquote {
+  border-left: none;
+  margin: 0 0 10pt 0;
+  padding: 4pt 0;
+  font-size: 9pt;
+  color: #666;
+  font-style: italic;
+}
+
+blockquote p {
+  margin: 0;
+}
+
+h2 {
+  font-size: 14pt;
+  font-weight: 700;
+  margin: 16pt 0 4pt 0;
+  padding: 6pt 10pt;
+  border-radius: 4pt;
+  page-break-after: avoid;
+}
+
+h2:nth-of-type(1) { background: #e8f0fe; color: #1a56db; border-left: 4pt solid #1a56db; }
+h2:nth-of-type(2) { background: #fef3e2; color: #b45309; border-left: 4pt solid #b45309; }
+h2:nth-of-type(3) { background: #e6f9ed; color: #15803d; border-left: 4pt solid #15803d; }
+h2:nth-of-type(4) { background: #f3e8ff; color: #7c3aed; border-left: 4pt solid #7c3aed; }
+
+h3 {
+  font-size: 11pt;
+  font-weight: 600;
+  color: #374151;
+  margin: 10pt 0 4pt 0;
+  page-break-after: avoid;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid #e0e0e0;
+  margin: 14pt 0;
+}
+
+ul {
+  margin: 4pt 0 8pt 0;
+  padding-left: 16pt;
+}
+
+li {
+  margin-bottom: 5pt;
+  line-height: 1.45;
+}
+
+li strong {
+  color: #111;
+}
+
+li em {
+  font-size: 8pt;
+  color: #6b7280;
+}
+
+code {
+  background: #f3f4f6;
+  padding: 1pt 3pt;
+  border-radius: 2pt;
+  font-size: 9pt;
+  font-family: "SF Mono", "Fira Code", monospace;
+}
+
+pre {
+  background: #f3f4f6;
+  padding: 8pt;
+  border-radius: 4pt;
+  font-size: 8pt;
+  overflow-wrap: break-word;
+  white-space: pre-wrap;
+}

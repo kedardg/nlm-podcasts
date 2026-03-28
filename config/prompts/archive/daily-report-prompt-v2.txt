@@ -1,0 +1,96 @@
+Generate a comprehensive daily briefing using the tagged format below. This is a FULL-LENGTH MAGAZINE — write in-depth, detailed coverage for every source. The reader should understand every key development WITHOUT needing to click through to the originals.
+
+CRITICAL FORMATTING RULES:
+- Use ONLY the XML-like tags shown below — no other markup outside of tags
+- Every source URL from the notebook MUST appear in exactly one ARTICLE tag
+- Do NOT add markdown headers (##, ###) — use only the tags
+- Inside all content, use **bold** for key terms and plain text only
+- Do NOT wrap the entire output in a code block or add preamble/postamble text
+
+Output this structure:
+
+<BRIEFING date="YYYY-MM-DD">
+
+<HEADLINE>
+One-sentence summary of today's most significant theme across all sources.
+</HEADLINE>
+
+<SECTION name="AI Research">
+<SUMMARY>
+4-8 sentence overarching synthesis of this category. Identify the macro themes, how items connect to each other, and what trajectory these developments suggest. This should read as editorial analysis, not a list of items.
+</SUMMARY>
+
+<ARTICLE>
+<TITLE>Descriptive Article Title</TITLE>
+<SOURCE>exact_source_url_here</SOURCE>
+<TLDR>Single sentence capturing the core point.</TLDR>
+<BODY>
+Write a thorough, self-contained analysis covering ALL of the following:
+
+1. WHAT: What was announced, published, released, or reported. Be specific.
+2. HOW: Technical details — architectures, methodologies, parameter counts, training approaches, system designs. Include specific numbers and comparisons.
+3. RESULTS: Quantitative outcomes — benchmarks, performance metrics, cost figures, efficiency gains. Use exact numbers from the source.
+4. WHY IT MATTERS: Implications for the field, industry, or practitioners. How does this shift the landscape?
+5. CONNECTIONS: How this relates to other items in today's briefing or to broader industry trends.
+
+Write in clear technical prose. Use **bold** for key terms, model names, and numbers. The reader should walk away understanding the key substance of this source completely.
+</BODY>
+</ARTICLE>
+
+<ARTICLE>
+<TITLE>Next Article</TITLE>
+<SOURCE>url</SOURCE>
+<TLDR>...</TLDR>
+<BODY>...</BODY>
+</ARTICLE>
+
+</SECTION>
+
+<SECTION name="Tech Industry">
+<SUMMARY>...</SUMMARY>
+<ARTICLE>...</ARTICLE>
+</SECTION>
+
+<SECTION name="Development">
+<SUMMARY>...</SUMMARY>
+<ARTICLE>...</ARTICLE>
+</SECTION>
+
+<SECTION name="News">
+<SUMMARY>...</SUMMARY>
+<ARTICLE>...</ARTICLE>
+</SECTION>
+
+<TAKEAWAYS>
+1. First actionable insight that synthesizes themes across multiple sections.
+2. Second cross-cutting insight...
+3. Third insight...
+4. Fourth insight...
+</TAKEAWAYS>
+
+</BRIEFING>
+
+COVERAGE DEPTH:
+- Every ARTICLE body MUST be at least 500 characters (roughly 5-8 sentences). Aim for 500-800 characters per article.
+- Major items (breakthroughs, large funding, flagship launches, influential papers): 800+ characters with full technical detail, methodology, results, and implications.
+- Notable items (significant developments): 500-800 characters covering key details, numbers, and why it matters.
+- If you cannot write at least 500 characters of SUBSTANTIVE content about a source (e.g., you only have a title and URL with no actual content), DO NOT create an ARTICLE for it — skip it entirely. Do NOT write generic filler like "A new paper on Machine Learning has been released" or "This repository has been updated."
+- Only create ARTICLE entries for sources where you have enough information to write a meaningful, specific analysis.
+
+SECTION ASSIGNMENT RULES:
+- AI Research: Papers, preprints, technical research posts, model architectures, training methods, benchmarks
+- Tech Industry: Product launches, funding rounds, acquisitions, infrastructure announcements, company strategy
+- Development: Open source tools, frameworks, libraries, developer guides, tutorials, SDKs
+- News: AI policy, regulation, workforce trends, security incidents, ethics, general interest
+
+WRITING GUIDELINES:
+- Technical audience with ML/AI expertise — no need to explain basic concepts
+- Lead with the most important information, then expand with detail
+- For papers: architecture, method, dataset, key results with numbers, comparison to baselines
+- For tools: problem solved, design approach, technical architecture, usage considerations
+- For funding/business: amount, investors, valuation context, what it signals about market direction
+- For policy/security: what happened, technical details, affected systems, remediation steps
+- Use specific numbers everywhere: "$3B", "397B parameters", "8x reduction", "1/5th cost"
+- SUMMARY blocks should synthesize — show patterns and connections, not just list what happened
+- TAKEAWAYS should be cross-section insights, not per-item summaries
+- Every ARTICLE SOURCE must be the exact URL from the source material — do not modify or shorten URLs

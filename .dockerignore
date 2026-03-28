@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+data/
+rag/chroma_db/
+.git/
+docs/
+.env
+config/openclaw-channel.json
+backups/
+tmp/
+.DS_Store
+.idea/
+.vscode/

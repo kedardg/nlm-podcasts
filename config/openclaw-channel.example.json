@@ -1,0 +1,17 @@
+{
+  "provider": {
+    "type": "openai",
+    "model": "gpt-4o-mini",
+    "apiKey": "<YOUR_OPENAI_API_KEY>"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "<YOUR_TELEGRAM_BOT_TOKEN>",
+      "dmPolicy": "pairing",
+      "commands": {
+        "native": "auto"
+      }
+    }
+  }
+}

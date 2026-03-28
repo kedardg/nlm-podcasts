@@ -1,0 +1,93 @@
+Generate a comprehensive daily briefing in clean Markdown. This is a FULL-LENGTH MAGAZINE — write in-depth, detailed coverage for every source. The reader should understand every key development WITHOUT needing to click through to the originals.
+
+CRITICAL FORMATTING RULES:
+- Use ONLY standard Markdown — no XML tags, no HTML tags, no custom markup
+- Use ## for section headings (exactly: AI Research, Tech Industry, Development, News)
+- Use ### for EVERY article title — NEVER use **bold** as a substitute for ### headings
+- Use **bold** for key terms, model names, and numbers within body text
+- Every source URL from the notebook MUST appear in exactly one article as a **Source:** line
+- Do NOT wrap the entire output in a code block or add preamble/postamble text
+
+Output this structure:
+
+# Your Descriptive Title Here
+
+A 1-2 sentence summary of the most significant theme across all sources.
+
+## AI Research
+
+Write a 4-paragraph synthesis of this category (500 words max). Structure:
+- Paragraph 1: The dominant theme or most significant development and why it matters right now.
+- Paragraph 2: How the individual items in this section connect to each other — shared techniques, converging trends, or contrasting approaches.
+- Paragraph 3: Broader context — how today's developments fit into the trajectory of the field over recent weeks/months.
+- Paragraph 4: What to watch — open questions, expected follow-ups, or implications practitioners should prepare for.
+This should read as editorial analysis, not a list of items.
+
+### Descriptive Article Title
+**Source:** exact_source_url_here
+**Analysis:** Write a single dense paragraph (500-800 characters for notable items, 800+ for major items) that weaves together WHAT happened, HOW it works (technical details, architectures, numbers), KEY RESULTS (benchmarks, metrics, exact figures), WHY IT MATTERS (implications, landscape shift), and CONNECTIONS to other items in the briefing or broader trends. Use **bold** for key terms, model names, and numbers. The reader should fully understand this development without clicking through. Write with editorial voice — not a dry summary but an informed analysis that contextualizes the significance.
+
+### Next Article Title
+**Source:** url
+**Analysis:** ...
+
+## Tech Industry
+
+4-paragraph synthesis (same structure as AI Research above, 500 words max)...
+
+### Article...
+
+## Development
+
+4-paragraph synthesis (same structure as AI Research above, 500 words max)...
+
+### Article...
+
+## News
+
+4-paragraph synthesis (same structure as AI Research above, 500 words max)...
+
+### Article...
+
+## Key Takeaways
+
+1. First actionable insight that synthesizes themes across multiple sections.
+2. Second cross-cutting insight...
+3. Third insight...
+4. Fourth insight...
+
+---
+
+## Source Links
+
+List ALL source URLs from the notebook here, including sources that were NOT covered as individual articles (low-information items, duplicates, or items without enough substance for a full article). Format as a bulleted list:
+- [Descriptive title or link text](exact_url) *(category, origin)*
+- [Another source](url) *(category, origin)*
+
+This section ensures every source is discoverable even if it didn't warrant a full article above. Sources that DO have articles above should also appear here for easy reference.
+
+COVERAGE DEPTH:
+- Every **Analysis:** paragraph MUST be at least 500 characters (roughly 5-8 sentences). Aim for 500-800 characters per article.
+- Major items (breakthroughs, large funding, flagship launches, influential papers): 800+ characters with full technical detail, methodology, results, and implications.
+- Notable items (significant developments): 500-800 characters covering key details, numbers, and why it matters.
+- If you cannot write at least 500 characters of SUBSTANTIVE content about a source (e.g., you only have a title and URL with no actual content), DO NOT create an article for it — skip it entirely. Include it only in the Source Links section at the end.
+- Only create article entries for sources where you have enough information to write a meaningful, specific analysis.
+- Items skipped from articles MUST still appear in the ## Source Links section — no source should be lost.
+
+SECTION ASSIGNMENT RULES:
+- AI Research: Papers, preprints, technical research posts, model architectures, training methods, benchmarks
+- Tech Industry: Product launches, funding rounds, acquisitions, infrastructure announcements, company strategy
+- Development: Open source tools, frameworks, libraries, developer guides, tutorials, SDKs
+- News: AI policy, regulation, workforce trends, security incidents, ethics, general interest
+
+WRITING GUIDELINES:
+- Technical audience with ML/AI expertise — no need to explain basic concepts
+- Lead with the most important information, then expand with detail
+- For papers: architecture, method, dataset, key results with numbers, comparison to baselines
+- For tools: problem solved, design approach, technical architecture, usage considerations
+- For funding/business: amount, investors, valuation context, what it signals about market direction
+- For policy/security: what happened, technical details, affected systems, remediation steps
+- Use specific numbers everywhere: "$3B", "397B parameters", "8x reduction", "1/5th cost"
+- Section synthesis after each ## MUST be exactly 4 paragraphs (500 words max): dominant theme, connections between items, broader context, what to watch
+- Key Takeaways should be cross-section insights, not per-item summaries
+- Every article Source must be the exact URL from the source material — do not modify or shorten URLs
