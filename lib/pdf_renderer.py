@@ -20,6 +20,7 @@ import argparse
 import os
 import re
 import sys
+from html import escape as _html_escape
 from pathlib import Path
 
 # Ensure Homebrew libraries are discoverable on macOS
@@ -28,8 +29,15 @@ if sys.platform == "darwin" and "/opt/homebrew/lib" not in os.environ.get("DYLD_
         os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "") + ":/opt/homebrew/lib"
     ).lstrip(":")
 
-from markdown_it import MarkdownIt
-from weasyprint import HTML
+try:
+    from markdown_it import MarkdownIt
+except ImportError:
+    MarkdownIt = None
+
+try:
+    from weasyprint import HTML as _WeasyHTML
+except ImportError:
+    _WeasyHTML = None
 
 PROJECT_ROOT = Path(__file__).parent.parent
 DEFAULT_CSS = PROJECT_ROOT / "templates" / "daily-feed.css"
@@ -66,6 +74,31 @@ BADGE_COLORS = {
     "blog": {"bg": "#dcfce7", "text": "#166534"},
     "tool": {"bg": "#e0e7ff", "text": "#3730a3"},
 }
+
+
+def _safe_text(value: str) -> str:
+    """Escape a string for use in HTML text content."""
+    return _html_escape(str(value))
+
+
+def _safe_attr(value: str) -> str:
+    """Escape a string for use in an HTML attribute value."""
+    return _html_escape(str(value), quote=True)
+
+
+def _safe_url(url: str) -> str:
+    """Return URL only if it uses a safe scheme, empty string otherwise."""
+    if url and str(url).strip().lower().startswith(('http://', 'https://')):
+        return url
+    return ''
+
+
+def _safe_link(url: str, text: str) -> str:
+    """Render a safe HTML anchor tag with escaped URL and text."""
+    safe_u = _safe_url(url)
+    if safe_u:
+        return f'<a href="{_safe_attr(safe_u)}">{_safe_text(text)}</a>'
+    return _safe_text(text)
 
 
 def domain_pill_color(url: str) -> str:
@@ -260,7 +293,7 @@ def render_html_pdf(html_body: str, output_path: str, css_path: str | None = Non
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    HTML(string=full_html).write_pdf(str(output))
+    _WeasyHTML(string=full_html).write_pdf(str(output))
     return str(output.resolve())
 
 
@@ -333,7 +366,7 @@ def render_pdf(markdown_text: str, output_path: str, css_path: str | None = None
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 
-    HTML(string=full_html).write_pdf(str(output))
+    _WeasyHTML(string=full_html).write_pdf(str(output))
     return str(output.resolve())
 
 
@@ -387,13 +420,13 @@ def _render_front_page(magazine: dict) -> str:
 
     # Header banner
     parts.append(f"""<header class="mag-header">
-<div class="mag-date">{date_display}</div>
-<h1 class="mag-title">{title}</h1>
-<div class="mag-subtitle">{subtitle}</div>
+<div class="mag-date">{_safe_text(date_display)}</div>
+<h1 class="mag-title">{_safe_text(title)}</h1>
+<div class="mag-subtitle">{_safe_text(subtitle)}</div>
 </header>""")
 
     # Editorial brief
-    parts.append(f'<div class="mag-v2-editorial"><p>{editorial_brief}</p></div>')
+    parts.append(f'<div class="mag-v2-editorial"><p>{_safe_text(editorial_brief)}</p></div>')
 
     # Top stories
     top_stories = magazine.get("top_stories", [])
@@ -413,9 +446,9 @@ def _render_front_page(magazine: dict) -> str:
                 m = re.match(r"(.+?[.!?])(?:\s|$)", clean, re.DOTALL)
                 first_sentence = m.group(1) if m else clean[:120]
 
-            pill_html = f'<span class="mag-v2-pill" style="background:{pill_color}">{domain}</span> ' if domain else ""
-            title_html = f'<a href="{url}">{story_title}</a>' if url else story_title
-            summary_html = f'<div class="mag-v2-top-story-summary">{first_sentence}</div>' if first_sentence else ""
+            pill_html = f'<span class="mag-v2-pill" style="background:{pill_color}">{_safe_text(domain)}</span> ' if domain else ""
+            title_html = _safe_link(url, story_title)
+            summary_html = f'<div class="mag-v2-top-story-summary">{_safe_text(first_sentence)}</div>' if first_sentence else ""
 
             parts.append(f'<div class="mag-v2-top-story">{pill_html}{title_html}{summary_html}</div>')
         parts.append("</div>")
@@ -428,11 +461,11 @@ def _render_front_page(magazine: dict) -> str:
             theme = SECTION_THEMES.get(section["name"], {"accent": "#374151", "bg": "#f3f4f6"})
             count = len(section.get("items", []))
             preview = section.get("preview", "")
-            preview_html = f' <span class="mag-v2-nav-preview">— {preview}</span>' if preview else ""
+            preview_html = f' <span class="mag-v2-nav-preview">— {_safe_text(preview)}</span>' if preview else ""
             parts.append(
                 f'<div class="mag-v2-nav-item">'
                 f'<span class="mag-v2-nav-dot" style="background:{theme["accent"]}"></span>'
-                f'<strong>{section["name"]}</strong> '
+                f'<strong>{_safe_text(section["name"])}</strong> '
                 f'<span class="mag-v2-nav-count">({count})</span>'
                 f'{preview_html}'
                 f'</div>'
@@ -542,14 +575,14 @@ def render_magazine_pdf(magazine: dict, output_path: str, css_path: str | None =
                     url = item.get("url", "")
                     brief_title = item.get("title", "")
                     summary = item.get("summary", "")
-                    link = f'<a href="{url}">{brief_title}</a>' if url else brief_title
+                    link = _safe_link(url, brief_title)
                     domain = _extract_domain(url)
                     pill_color = domain_pill_color(url) if url else DOMAIN_COLOR_DEFAULT
-                    pill_html = f'<span class="mag-v2-pill" style="background:{pill_color}">{domain}</span> ' if domain else ""
+                    pill_html = f'<span class="mag-v2-pill" style="background:{pill_color}">{_safe_text(domain)}</span> ' if domain else ""
                     parts.append('<div class="mag-brief-item">')
                     parts.append(f'<div class="mag-brief-title">{pill_html}{link}</div>')
                     if summary:
-                        summary_html = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", summary)
+                        summary_html = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", _safe_text(summary))
                         parts.append(f'<div class="mag-brief-text">{summary_html}</div>')
                     parts.append('</div>')
                 if len(briefs) > MAX_REFS:
@@ -564,8 +597,8 @@ def render_magazine_pdf(magazine: dict, output_path: str, css_path: str | None =
                     ref_title = item.get("title", "")
                     domain = _extract_domain(url)
                     pill_color = domain_pill_color(url) if url else DOMAIN_COLOR_DEFAULT
-                    link = f'<a href="{url}">{ref_title}</a>' if url else ref_title
-                    pill_html = f'<span class="mag-v2-pill" style="background:{pill_color}">{domain}</span> ' if domain else ""
+                    link = _safe_link(url, ref_title)
+                    pill_html = f'<span class="mag-v2-pill" style="background:{pill_color}">{_safe_text(domain)}</span> ' if domain else ""
                     parts.append(f'<div class="mag-ref-item">{pill_html}{link}</div>')
                 if len(briefs) > MAX_REFS:
                     parts.append(f'<div class="mag-ref-item mag-ref-more">+ {len(briefs) - MAX_REFS} more</div>')
@@ -591,20 +624,20 @@ def _render_magazine_card(item: dict, card_type: str, section_name: str = "") ->
     item_id = item.get("id", "")
 
     if summary:
-        summary = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", summary)
+        summary = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", _safe_text(summary))
 
     domain = _extract_domain(url)
     pill_color = domain_pill_color(url) if url else DOMAIN_COLOR_DEFAULT
 
     # Domain pill
-    pill_html = f'<span class="mag-v2-pill" style="background:{pill_color}">{domain}</span>' if domain else ""
+    pill_html = f'<span class="mag-v2-pill" style="background:{pill_color}">{_safe_text(domain)}</span>' if domain else ""
 
     # Content type badge
     badge_colors = BADGE_COLORS.get(content_type, {"bg": "#f3f4f6", "text": "#374151"})
     badge_html = (
-        f'<span class="mag-v2-badge mag-v2-badge--{content_type}" '
+        f'<span class="mag-v2-badge mag-v2-badge--{_safe_attr(content_type)}" '
         f'style="background:{badge_colors["bg"]}; color:{badge_colors["text"]}">'
-        f'{content_type.upper()}</span>'
+        f'{_safe_text(content_type.upper())}</span>'
     )
 
     # Significance bars (featured and standard only)
@@ -614,14 +647,14 @@ def _render_magazine_card(item: dict, card_type: str, section_name: str = "") ->
     meta_html = f'<div class="mag-card-meta">{pill_html}{badge_html}{sig_html}</div>'
 
     # Title
-    title_html = f'<a href="{url}">{title}</a>' if url else title
+    title_html = _safe_link(url, title)
 
     # Build article element with data attributes
     data_attrs = (
-        f'data-article-id="{item_id}" '
-        f'data-url="{url}" '
-        f'data-section="{section_name}" '
-        f'data-content-type="{content_type}"'
+        f'data-article-id="{_safe_attr(item_id)}" '
+        f'data-url="{_safe_attr(url)}" '
+        f'data-section="{_safe_attr(section_name)}" '
+        f'data-content-type="{_safe_attr(content_type)}"'
     )
     card_class = f"mag-card mag-card-{card_type}"
 

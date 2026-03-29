@@ -29,6 +29,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from lib.file_utils import load_json, save_json, now_iso
+from lib.pdf_renderer import _safe_text, _safe_link, _safe_attr
 
 try:
     import llm_tracer
@@ -1083,14 +1084,14 @@ def generate_magazine_html(merged_data, target_date):
 
     # Header
     parts.append(f"""<header class="mag-header">
-<div class="mag-date">{weekday}, {month} {day}, {year}</div>
+<div class="mag-date">{_safe_text(weekday)}, {_safe_text(month)} {day}, {year}</div>
 <h1 class="mag-title">Daily Tech Feed</h1>
 <div class="mag-subtitle">{total_items} items curated from newsletters, X, and manual sources</div>
 </header>""")
 
     # Headline
     if merged_data["headline"]:
-        headline_clean = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", merged_data["headline"])
+        headline_clean = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", _safe_text(merged_data["headline"]))
         parts.append(f'<div class="mag-headline">{headline_clean}</div>')
 
     # Sections
@@ -1100,13 +1101,13 @@ def generate_magazine_html(merged_data, target_date):
 
         parts.append(f"""<section class="mag-section" style="--section-accent: {theme['accent']}; --section-bg: {theme['bg']};">
 <div class="mag-section-header">
-<h2>{section['name']}</h2>
+<h2>{_safe_text(section['name'])}</h2>
 <span class="mag-item-count">{item_count} items</span>
 </div>""")
 
         # Section synthesis
         if section["synthesis"]:
-            synth_html = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", section["synthesis"])
+            synth_html = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", _safe_text(section["synthesis"]))
             parts.append(f'<div class="mag-synthesis">{synth_html}</div>')
 
         # Check if any items have substantial article content (new format)
@@ -1140,8 +1141,8 @@ def generate_magazine_html(merged_data, target_date):
                     title = item["title"]
                     url = item["url"]
                     tldr = item.get("nlm_tldr", "") or item.get("nlm_body", "")
-                    tldr = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", tldr)
-                    link = f'<a href="{url}">{title}</a>' if url else title
+                    tldr = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", _safe_text(tldr))
+                    link = _safe_link(url, title)
                     parts.append(f'<div class="mag-brief-item">')
                     parts.append(f'<div class="mag-brief-title">{link}</div>')
                     parts.append(f'<div class="mag-brief-text">{tldr}</div>')
@@ -1161,8 +1162,8 @@ def generate_magazine_html(merged_data, target_date):
                         dm = re.search(r"https?://(?:www\.)?([^/]+)", url)
                         if dm:
                             domain = dm.group(1)
-                    link = f'<a href="{url}">{title}</a>' if url else title
-                    domain_span = f' <span class="mag-ref-domain">{domain}</span>' if domain else ""
+                    link = _safe_link(url, title)
+                    domain_span = f' <span class="mag-ref-domain">{_safe_text(domain)}</span>' if domain else ""
                     parts.append(f'<div class="mag-ref-item">{link}{domain_span}</div>')
                 if len(reference_items) > MAX_REFS:
                     parts.append(f'<div class="mag-ref-item mag-ref-more">+ {len(reference_items) - MAX_REFS} more</div>')
@@ -1191,7 +1192,7 @@ def generate_magazine_html(merged_data, target_date):
                 for item in compact[:MAX_COMPACT]:
                     title = item["title"]
                     url = item["url"]
-                    link = f'<a href="{url}">{title}</a>' if url else title
+                    link = _safe_link(url, title)
                     parts.append(f'<div class="mag-compact-item">{link}</div>')
                 if len(compact) > MAX_COMPACT:
                     parts.append(f'<div class="mag-compact-item mag-compact-more">+ {len(compact) - MAX_COMPACT} more items</div>')
@@ -1205,7 +1206,7 @@ def generate_magazine_html(merged_data, target_date):
         parts.append('<h2>Key Takeaways</h2>')
         parts.append("<ol>")
         for tw in merged_data["takeaways"]:
-            tw_html = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", tw)
+            tw_html = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", _safe_text(tw))
             parts.append(f"<li>{tw_html}</li>")
         parts.append("</ol>")
         parts.append("</section>")
@@ -1226,7 +1227,7 @@ def _render_card(item, card_type):
 
     # Clean up bold markdown in summary
     if summary:
-        summary = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", summary)
+        summary = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", _safe_text(summary))
 
     # Skip summary if it's too similar to the title (NLM-only items)
     if summary and _text_similar(title, summary):
@@ -1243,16 +1244,13 @@ def _render_card(item, card_type):
 
     parts = [f'<div class="{css_class}">']
     if category and category.lower() != "general":
-        parts.append(f'<div class="mag-card-tag">{category}</div>')
+        parts.append(f'<div class="mag-card-tag">{_safe_text(category)}</div>')
     # Title is the link
-    if url:
-        parts.append(f'<div class="mag-card-title"><a href="{url}">{title}</a></div>')
-    else:
-        parts.append(f'<div class="mag-card-title">{title}</div>')
+    parts.append(f'<div class="mag-card-title">{_safe_link(url, title)}</div>')
     if summary:
         parts.append(f'<div class="mag-card-summary">{summary}</div>')
     if domain:
-        parts.append(f'<div class="mag-card-source">{domain}</div>')
+        parts.append(f'<div class="mag-card-source">{_safe_text(domain)}</div>')
     parts.append("</div>")
 
     return "\n".join(parts)
@@ -1278,21 +1276,18 @@ def _render_article(item):
     parts = ['<article class="mag-article">']
 
     # Title (linked) + source domain
-    if url:
-        parts.append(f'<h3 class="mag-article-title"><a href="{url}">{title}</a></h3>')
-    else:
-        parts.append(f'<h3 class="mag-article-title">{title}</h3>')
+    parts.append(f'<h3 class="mag-article-title">{_safe_link(url, title)}</h3>')
     if domain:
-        parts.append(f'<div class="mag-article-source">{domain}</div>')
+        parts.append(f'<div class="mag-article-source">{_safe_text(domain)}</div>')
 
     # TL;DR callout — skip if redundant with body (> 40% of body length)
     if tldr and body and len(tldr) < len(body) * 0.4:
-        tldr_html = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", tldr)
+        tldr_html = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", _safe_text(tldr))
         parts.append(f'<div class="mag-article-tldr"><strong>TL;DR:</strong> {tldr_html}</div>')
 
     # Body content — paragraphs and lists
     if body:
-        body_html = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", body)
+        body_html = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", _safe_text(body))
         paragraphs = [p.strip() for p in body_html.split("\n\n") if p.strip()]
         for p in paragraphs:
             lines = [l for l in p.split("\n") if l.strip()]
