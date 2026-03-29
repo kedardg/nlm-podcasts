@@ -650,9 +650,10 @@ def _render_magazine_card(item: dict, card_type: str, section_name: str = "") ->
     title_html = _safe_link(url, title)
 
     # Build article element with data attributes
+    safe_data_url = _safe_url(url)
     data_attrs = (
         f'data-article-id="{_safe_attr(item_id)}" '
-        f'data-url="{_safe_attr(url)}" '
+        f'data-url="{_safe_attr(safe_data_url)}" '
         f'data-section="{_safe_attr(section_name)}" '
         f'data-content-type="{_safe_attr(content_type)}"'
     )
