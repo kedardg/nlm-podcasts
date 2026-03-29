@@ -696,15 +696,16 @@ def render_magazine_pdf(target_date, nlm_report_path, grouped_sections):
         return None
 
 
-def run(target_date=None, dry_run=False, markdown_only=False, pdf_only=False, magazine=False):
+def run(target_date=None, dry_run=False, markdown_only=False, pdf_only=False, magazine=False, pdf=False):
     """Main daily feed pipeline.
 
     Args:
         target_date: Date string YYYY-MM-DD (default: today UTC)
         dry_run: Preview without saving
         markdown_only: Generate markdown briefing only
-        pdf_only: Generate markdown + PDF only (no podcast commands)
-        magazine: If an NLM v2 report exists, render magazine-style PDF
+        pdf_only: Generate markdown + PDF only (no podcast commands) — DEPRECATED, use pdf=True
+        magazine: DEPRECATED — HTML is always magazine layout when NLM report exists
+        pdf: Also produce PDF alongside HTML (optional archival export)
     """
     if _LLM_TRACER:
         llm_tracer.init(app="openclaw-research")
@@ -762,35 +763,43 @@ def run(target_date=None, dry_run=False, markdown_only=False, pdf_only=False, ma
     if markdown_only:
         return str(md_path)
 
-    # Generate PDF — try magazine layout if NLM report is available
+    # Generate HTML — try magazine layout if NLM report is available
+    html_path = DAILY_FEED_DIR / f"{target_date}.html"
     pdf_path = DAILY_FEED_DIR / f"{target_date}.pdf"
     nlm_report_path = DAILY_FEED_DIR / f"{target_date}-report.md"
 
-    if magazine and nlm_report_path.exists():
+    if nlm_report_path.exists():
         print(f"NLM report found: {nlm_report_path}")
-        result = render_magazine_pdf(target_date, str(nlm_report_path), grouped)
-        if not result:
-            # Fallback to plain PDF
-            print("Falling back to plain markdown PDF.")
+        html_result = render_magazine_html_output(target_date, str(nlm_report_path), grouped)
+        if not html_result:
+            print("Magazine HTML failed, generating plain HTML from markdown.")
+            # Fallback: wrap markdown briefing in minimal HTML
+            _write_plain_html(briefing, html_path, target_date)
+    else:
+        print(f"No NLM report at {nlm_report_path}, generating plain HTML.")
+        _write_plain_html(briefing, html_path, target_date)
+
+    # Optional PDF alongside HTML
+    if pdf or pdf_only:
+        if nlm_report_path.exists():
+            pdf_result = render_magazine_pdf(target_date, str(nlm_report_path), grouped)
+            if not pdf_result:
+                try:
+                    from lib.pdf_renderer import render_pdf
+                    render_pdf(briefing, str(pdf_path), skip_toc=True)
+                    print(f"Plain PDF generated: {pdf_path}")
+                except Exception as e:
+                    print(f"WARNING: PDF generation failed: {e}")
+        else:
             try:
                 from lib.pdf_renderer import render_pdf
-                result = render_pdf(briefing, str(pdf_path), skip_toc=True)
-                print(f"PDF generated: {result}")
+                render_pdf(briefing, str(pdf_path), skip_toc=True)
+                print(f"PDF generated: {pdf_path}")
             except Exception as e:
                 print(f"WARNING: PDF generation failed: {e}")
-    else:
-        if magazine:
-            print(f"No NLM report at {nlm_report_path}, using plain PDF.")
-        try:
-            from lib.pdf_renderer import render_pdf
-            result = render_pdf(briefing, str(pdf_path), skip_toc=True)
-            print(f"PDF generated: {result}")
-        except Exception as e:
-            print(f"WARNING: PDF generation failed: {e}")
-            print("Continuing with markdown only.")
 
     if pdf_only:
-        return str(pdf_path)
+        return str(html_path)
 
     # Generate NotebookLM commands
     nlm_commands = generate_notebooklm_commands(grouped, target_date, briefing)
@@ -808,14 +817,17 @@ def run(target_date=None, dry_run=False, markdown_only=False, pdf_only=False, ma
     print(f"\nDaily feed pipeline complete for {target_date}.")
     print(f"Artifacts:")
     print(f"  Markdown: {md_path}")
-    print(f"  PDF:      {pdf_path}")
+    print(f"  HTML:     {html_path}")
+    if (pdf or pdf_only) and pdf_path.exists():
+        print(f"  PDF:      {pdf_path}")
     print(f"  NLM cmds: {commands_path}")
 
     return {
         "date": target_date,
         "item_count": len(items),
         "markdown_path": str(md_path),
-        "pdf_path": str(pdf_path),
+        "html_path": str(html_path),
+        "pdf_path": str(pdf_path) if pdf_path.exists() else None,
         "commands_path": str(commands_path),
         "sections": {name: len(sitems) for name, sitems in grouped},
     }
@@ -1446,14 +1458,43 @@ def _text_similar(a, b):
     return shorter in longer
 
 
+def _write_plain_html(briefing_md, html_path, target_date):
+    """Write a plain HTML file wrapping the markdown briefing."""
+    from pathlib import Path as _P
+    css_file = _P(__file__).parent / "templates" / "magazine-responsive.css"
+    css = css_file.read_text(encoding="utf-8") if css_file.exists() else ""
+    # Convert markdown bold to HTML
+    body = _safe_text(briefing_md)
+    body = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", body)
+    body = body.replace("\n\n", "</p><p>").replace("\n", "<br>")
+    body = f"<p>{body}</p>"
+    html = (
+        "<!DOCTYPE html>\n"
+        '<html lang="en"><head>\n'
+        '<meta charset="utf-8">\n'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
+        '<meta name="color-scheme" content="light dark">\n'
+        f"<title>Daily Feed \u2014 {_safe_text(target_date)}</title>\n"
+        f"<style>{css}</style>\n"
+        "</head><body>\n"
+        f'<header class="mag-header"><h1 class="mag-title">Daily Tech Feed</h1>'
+        f'<div class="mag-date">{_safe_text(target_date)}</div></header>\n'
+        f'<div class="mag-section-body">{body}</div>\n'
+        "</body></html>\n"
+    )
+    html_path.parent.mkdir(parents=True, exist_ok=True)
+    html_path.write_text(html, encoding="utf-8")
+    print(f"Plain HTML generated: {html_path}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Daily Tech Feed Generator")
     parser.add_argument("--dry-run", action="store_true", help="Preview without saving or sending")
     parser.add_argument("--date", type=str, help="Target date (YYYY-MM-DD, default: today)")
-    parser.add_argument("--markdown-only", action="store_true", help="Generate markdown only (no PDF)")
-    parser.add_argument("--pdf-only", action="store_true", help="Generate markdown + PDF only (no podcast)")
-    parser.add_argument("--magazine", action="store_true",
-                        help="Use NLM-first magazine layout (requires NLM v2 report at data/daily-feed/DATE-report.md)")
+    parser.add_argument("--markdown-only", action="store_true", help="Generate markdown only")
+    parser.add_argument("--pdf", action="store_true", help="Also produce PDF alongside HTML")
+    parser.add_argument("--pdf-only", action="store_true", help="(Deprecated) Alias for --pdf")
+    parser.add_argument("--magazine", action="store_true", help="(Deprecated) HTML is always magazine layout")
     args = parser.parse_args()
 
     run(
@@ -1461,6 +1502,7 @@ def main():
         dry_run=args.dry_run,
         markdown_only=args.markdown_only,
         pdf_only=args.pdf_only,
+        pdf=args.pdf or args.pdf_only,
         magazine=args.magazine,
     )
 

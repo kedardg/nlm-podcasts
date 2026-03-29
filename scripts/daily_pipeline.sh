@@ -60,12 +60,12 @@ done
 
 FEED_DIR="$PROJECT_ROOT/data/daily-feed"
 MD_FILE="$FEED_DIR/$DATE.md"
+HTML_FILE="$FEED_DIR/$DATE.html"
 PDF_FILE="$FEED_DIR/$DATE.pdf"
 REPORT_MD="$FEED_DIR/$DATE-report.md"
 REPORT_PDF="$FEED_DIR/$DATE-report.pdf"
 PODCAST_RAW="$FEED_DIR/$DATE-podcast-raw.mp4"
 PODCAST="$FEED_DIR/$DATE-podcast.mp3"
-MAGAZINE_PDF="$FEED_DIR/$DATE.pdf"  # magazine writes to same path as plain PDF
 
 PIPELINE_START=$(date +%s)
 STEP_DURATIONS=""
@@ -142,8 +142,8 @@ step_start "blog_monitor"
 $PYTHON "$PROJECT_ROOT/blog_monitor.py" 2>&1 && { step_ok "blog-monitor"; step_end "blog_monitor" "ok"; } || { step_fail "blog-monitor"; step_end "blog_monitor" "fail"; }
 echo ""
 
-# ── Step 1: Generate daily feed PDF ────────────────────────────
-log "Step 1: Generate daily feed (markdown + PDF)"
+# ── Step 1: Generate daily feed HTML ────────────────────────────
+log "Step 1: Generate daily feed (markdown + HTML)"
 DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/daily_feed_generator.py" \
     --pdf-only --date "$DATE" 2>&1
 STEP1_EXIT=$?
@@ -164,12 +164,15 @@ echo ""
 # Stop here if --pdf-only
 if $PDF_ONLY; then
     log "=== PDF-only mode — skipping NLM steps ==="
-    # Still deliver what we have
-    if [[ -f "$PDF_FILE" ]] && [[ -n "$TELEGRAM_CHAT_ID" ]]; then
+    # Deliver HTML (or fall back to PDF)
+    if [[ -f "$HTML_FILE" ]] && [[ -n "$TELEGRAM_CHAT_ID" ]]; then
+        log "Delivering HTML via Telegram..."
+        tg_send_file "$HTML_FILE" "Daily Tech Feed — $DATE" 2>&1 && step_ok "telegram-html" || step_fail "telegram-html"
+    elif [[ -f "$PDF_FILE" ]] && [[ -n "$TELEGRAM_CHAT_ID" ]]; then
         log "Delivering PDF via Telegram..."
         tg_send_file "$PDF_FILE" "Daily Tech Feed — $DATE" 2>&1 && step_ok "telegram-pdf" || step_fail "telegram-pdf"
     fi
-    log "=== Pipeline Complete (PDF only) ==="
+    log "=== Pipeline Complete (PDF-only mode) ==="
     exit 0
 fi
 
@@ -270,10 +273,10 @@ for u in urls:
 
     # Magazine PDF (same as CLI path)
     if [[ -f "$REPORT_MD" ]]; then
-        log "Step 6.5: Generate magazine PDF"
+        log "Step 6.5: Generate magazine HTML"
         DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/daily_feed_generator.py" \
-            --date "$DATE" --magazine --pdf-only 2>&1 && \
-            step_ok "magazine-pdf" || step_fail "magazine-pdf"
+            --date "$DATE" --pdf-only 2>&1 && \
+            step_ok "magazine-html" || step_fail "magazine-html"
         echo ""
     fi
 
@@ -535,10 +538,10 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
 
     # ── Step 6.5: Magazine PDF (NLM-first layout) ──────────────
     if [[ -f "$REPORT_MD" ]]; then
-        log "Step 6.5: Generate magazine PDF"
+        log "Step 6.5: Generate magazine HTML"
         DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/daily_feed_generator.py" \
-            --date "$DATE" --magazine --pdf-only 2>&1 && \
-            step_ok "magazine-pdf" || step_fail "magazine-pdf"
+            --date "$DATE" --pdf-only 2>&1 && \
+            step_ok "magazine-html" || step_fail "magazine-html"
         echo ""
     fi
 
@@ -580,18 +583,19 @@ Notebook: $SHARE_LINK"
 
     tg_send_message "$SUMMARY_MSG" 2>&1 && step_ok "telegram-summary" || step_fail "telegram-summary"
 
-    # Message 2: PDF report (prefer magazine/plain PDF > NLM report PDF)
-    # Note: --magazine writes to $PDF_FILE (same as plain), not a separate file
-    DELIVER_PDF=""
-    if [[ -f "$PDF_FILE" ]]; then
-        DELIVER_PDF="$PDF_FILE"
+    # Message 2: HTML magazine (prefer HTML > PDF > NLM report PDF)
+    DELIVER_FILE=""
+    if [[ -f "$HTML_FILE" ]]; then
+        DELIVER_FILE="$HTML_FILE"
+    elif [[ -f "$PDF_FILE" ]]; then
+        DELIVER_FILE="$PDF_FILE"
     elif [[ -f "$REPORT_PDF" ]]; then
-        DELIVER_PDF="$REPORT_PDF"
+        DELIVER_FILE="$REPORT_PDF"
     fi
 
-    if [[ -n "$DELIVER_PDF" ]]; then
-        tg_send_file "$DELIVER_PDF" "Daily Feed Report — $DATE" 2>&1 && \
-            step_ok "telegram-pdf" || step_fail "telegram-pdf"
+    if [[ -n "$DELIVER_FILE" ]]; then
+        tg_send_file "$DELIVER_FILE" "Daily Feed Report — $DATE" 2>&1 && \
+            step_ok "telegram-report" || step_fail "telegram-report"
     fi
 
     # Message 3: Podcast (sendAudio for inline player)

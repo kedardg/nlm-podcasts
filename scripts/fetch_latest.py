@@ -128,14 +128,15 @@ def main():
             print("No daily feed directory found. Run /process or wait for the daily cron.",
                   file=sys.stderr)
             sys.exit(1)
+        htmls = sorted(daily_dir.glob("*.html"), reverse=True)
         pdfs = sorted(daily_dir.glob("*.pdf"), reverse=True)
         mds = sorted(daily_dir.glob("*.md"), reverse=True)
-        if not pdfs and not mds:
+        if not htmls and not pdfs and not mds:
             print("No daily feed files found. Run /process or wait for the daily cron.",
                   file=sys.stderr)
             sys.exit(1)
-        # Prefer PDF, fall back to markdown
-        latest_file = pdfs[0] if pdfs else mds[0]
+        # Prefer HTML, fall back to PDF, then markdown
+        latest_file = htmls[0] if htmls else (pdfs[0] if pdfs else mds[0])
         date_str = latest_file.stem  # e.g. "2026-02-16"
         # Check for companion podcast
         podcast_path = daily_dir / f"{date_str}-podcast.mp3"
