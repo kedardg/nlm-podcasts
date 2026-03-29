@@ -545,6 +545,123 @@ def generate_notebooklm_commands(grouped_sections, target_date, briefing_markdow
     return commands
 
 
+def _to_magazine_json(merged_data, target_date):
+    """Normalize daily merged_data into the magazine JSON schema.
+
+    Maps the daily pipeline's merged_data format (with nlm_body, nlm_tldr,
+    nlm_summary, significance) into the magazine JSON schema consumed by
+    both lib/html_renderer and lib/pdf_renderer.
+
+    Items with nlm_body >= 300 chars become 'featured', those with NLM
+    coverage become 'standard', and unmatched items become 'brief'.
+    """
+    from datetime import datetime as dt
+    try:
+        d = dt.strptime(target_date, "%Y-%m-%d")
+        title = f"Daily Tech Feed \u2014 {d.strftime('%B %-d, %Y')}"
+    except (ValueError, AttributeError):
+        title = f"Daily Tech Feed \u2014 {target_date}"
+
+    sections = []
+    total, n_research, n_news, n_blog = 0, 0, 0, 0
+
+    for section in merged_data.get("sections", []):
+        section_items = []
+        for item in section.get("items", []):
+            nlm_body = item.get("nlm_body", "")
+            nlm_summary = item.get("nlm_summary", "")
+            nlm_tldr = item.get("nlm_tldr", "")
+            significance = item.get("significance", "low")
+
+            # Determine item type based on NLM coverage depth
+            if nlm_body and len(nlm_body) >= 300:
+                item_type = "featured"
+            elif nlm_summary or nlm_tldr:
+                item_type = "standard"
+            else:
+                item_type = "brief"
+
+            # Best available summary
+            summary = nlm_tldr or nlm_summary or ""
+
+            # Infer content_type from category or origin
+            origin = item.get("origin", "")
+            cat = item.get("category_name", "").lower()
+            if any(k in cat for k in ("ml", "nlp", "cv", "robot")):
+                content_type = "research"
+                n_research += 1
+            elif "news" in cat or "safety" in cat or "general" in cat:
+                content_type = "news"
+                n_news += 1
+            else:
+                content_type = "blog"
+                n_blog += 1
+
+            total += 1
+            section_items.append({
+                "id": item.get("id", ""),
+                "title": item.get("title", ""),
+                "url": item.get("url", ""),
+                "type": item_type,
+                "content_type": content_type,
+                "summary": summary,
+                "body": nlm_body,
+                "significance": significance,
+            })
+
+        sections.append({
+            "name": section.get("name", ""),
+            "introduction": section.get("synthesis", ""),
+            "items": section_items,
+        })
+
+    return {
+        "title": title,
+        "date": target_date,
+        "editorial_brief": merged_data.get("headline", ""),
+        "top_stories": [],  # daily pipeline doesn't pre-select top stories
+        "sections": sections,
+        "stats": {
+            "total": total,
+            "research": n_research,
+            "news": n_news,
+            "blog": n_blog,
+        },
+    }
+
+
+def render_magazine_html_output(target_date, nlm_report_path, grouped_sections):
+    """Render NLM-first magazine as a self-contained responsive HTML file.
+
+    Args:
+        target_date: Date string YYYY-MM-DD
+        nlm_report_path: Path to the NLM v2 report markdown file
+        grouped_sections: Output from group_by_section()
+
+    Returns:
+        Path to the generated HTML file, or None on failure.
+    """
+    report_text = Path(nlm_report_path).read_text()
+    parsed = parse_nlm_report(report_text)
+
+    if not parsed["sections"]:
+        print("WARNING: NLM report has no parseable sections, falling back to plain layout.")
+        return None
+
+    merged = merge_nlm_with_feed(parsed, grouped_sections)
+    magazine_json = _to_magazine_json(merged, target_date)
+
+    html_path = DAILY_FEED_DIR / f"{target_date}.html"
+    try:
+        from lib.html_renderer import render_magazine_html
+        result = render_magazine_html(magazine_json, html_path)
+        print(f"Magazine HTML generated: {result}")
+        return str(html_path)
+    except Exception as e:
+        print(f"WARNING: Magazine HTML generation failed: {e}")
+        return None
+
+
 def render_magazine_pdf(target_date, nlm_report_path, grouped_sections):
     """Render NLM-first magazine PDF from a v2 structured report.
 
