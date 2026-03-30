@@ -470,7 +470,14 @@ def run(date_str=None, triage_path=None, nlm_report_path=None,
         save_json(out, magazine)
         print(f"\nSaved: {out}")
 
-        # Render PDF
+        # Render HTML (default)
+        from lib.html_renderer import render_magazine_html as _render_html
+        html_path = out.with_suffix(".html")
+        with StepTimer("render-html"):
+            result = _render_html(magazine, html_path)
+            print(f"HTML: {result}")
+
+        # Render PDF (optional)
         if render_pdf:
             from lib.pdf_renderer import render_magazine_pdf as _render_pdf
             pdf_path = out.with_suffix(".pdf")

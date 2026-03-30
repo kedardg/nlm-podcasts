@@ -342,7 +342,7 @@ if $DRY_RUN; then
         && step_ok "magazine-generator (dry run)" || step_fail "magazine-generator"
 else
     DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:-}:/opt/homebrew/lib" \
-        $PYTHON "$PROJECT_ROOT/scripts/magazine_generator.py" --date "$DATE" --pdf 2>&1 \
+        $PYTHON "$PROJECT_ROOT/scripts/magazine_generator.py" --date "$DATE" 2>&1 \
         && step_ok "magazine-generator" || step_fail "magazine-generator"
 fi
 echo ""

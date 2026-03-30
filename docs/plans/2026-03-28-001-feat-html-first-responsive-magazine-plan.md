@@ -686,11 +686,11 @@ When adding JS interactivity in a future version, incorporate these findings:
 - [x] HTML escaping applied to all external-sourced content in both renderers (Phase 0, BLOCKING)
 - [x] `daily_feed_generator.py` produces `{DATE}.html` as default output
 - [x] `daily_feed_generator.py --pdf` produces both `{DATE}.html` and `{DATE}.pdf`
-- [ ] Weekly `magazine_generator.py` produces `.html` as default output
+- [x] Weekly `magazine_generator.py` produces `.html` as default output
 - [x] HTML file is self-contained: no external CSS, JS, images, or font references
 - [x] HTML file size < 150KB for a typical 50-item digest
 - [x] `daily_pipeline.sh` delivers `.html` via Telegram
-- [ ] `weekly_pipeline.sh` delivers `.html` via Telegram
+- [x] `weekly_pipeline.sh` delivers `.html` via Telegram
 - [x] `fetch_and_deliver.sh` finds `.html` first, falls back to `.pdf`
 - [x] Dark mode auto-detects via `prefers-color-scheme`
 - [x] Sections use `<details>/<summary>` (works without JS)
