@@ -43,10 +43,10 @@ Blog Feeds (RSS + Scrape):
     +-- Research articles --> data/sources.json (research pipeline)
     +-- News/announcements --> data/news-queue.json (news pipeline)
 
-Cron (Daily 6PM ET):
-  daily-digest --> collect today's items --> NLM notebook + report + podcast --> Telegram
+launchd (Daily 11AM ET):
+  daily-digest --> collect last 2 days' items --> NLM notebook + report + podcast --> Telegram
 
-Cron (Saturday 9AM ET):
+launchd (Saturday 9AM ET):
   0. archive_old_news.py --> archive queued news >30 days
   1. newsletter-monitor --> fetch newsletter emails via IMAP
   1.5. blog-monitor --> fetch AI company blog feeds
@@ -84,7 +84,8 @@ openclaw-research/
 |   +-- daily_pipeline.sh       # Daily cron script (Steps 0-10)
 |   +-- weekly_pipeline.sh      # Weekly cron script (10-step pipeline)
 |   +-- fetch_and_deliver.sh    # Fetch + deliver artifacts to Telegram
-|   +-- nlm_ensure_auth.sh      # 4-layer NLM auth recovery
+|   +-- telegram_send.sh         # Telegram Bot API helpers (tg_send_message, tg_send_file, tg_send_audio)
+|   +-- nlm_ensure_auth.sh      # 5-layer NLM auth recovery (quick check, rotation, CDP, nlm login, Playwright sync)
 |   +-- nlm_rotate_cookies.py   # Google PSIDTS cookie rotation
 |   +-- nlm_download_audio.py   # NLM audio download (CDP workaround)
 |   +-- nlm_create_report.sh    # NLM report with custom prompt
@@ -149,10 +150,11 @@ openclaw-research/
 
 | Script | Usage | Description |
 |--------|-------|-------------|
-| `daily_pipeline.sh` | `bash scripts/daily_pipeline.sh [--skip-nlm\|--pdf-only\|--date YYYY-MM-DD\|--use-playwright]` | Daily cron (6 PM ET). Steps 0-10: newsletter fetch, blog fetch, PDF generation, NLM notebook + report + podcast, magazine PDF, RAG indexing, Telegram delivery. `--use-playwright` replaces NLM CLI steps with Playwright browser automation. |
-| `weekly_pipeline.sh` | `bash scripts/weekly_pipeline.sh [--skip-nlm\|--dry-run]` | Weekly cron (Sat 9 AM ET). 10 steps: archive, newsletter, blog, x-monitor, HF triage, data triage, content-processor, NLM orchestrator, magazine generator, news digest, delivery. |
+| `daily_pipeline.sh` | `bash scripts/daily_pipeline.sh [--skip-nlm\|--pdf-only\|--date YYYY-MM-DD\|--use-playwright]` | Daily launchd (11 AM ET). Steps 0-10: newsletter fetch, blog fetch, HTML/PDF generation, NLM notebook + report + podcast (30-min audio poll), magazine HTML, RAG indexing, Telegram delivery via direct Bot API. 2-day item window. |
+| `weekly_pipeline.sh` | `bash scripts/weekly_pipeline.sh [--skip-nlm\|--dry-run]` | Weekly launchd (Sat 9 AM ET). 10 steps: archive, newsletter, blog, x-monitor, HF triage, data triage, content-processor, NLM orchestrator, magazine generator, news digest, delivery. Consolidated weekly report + per-category podcasts. |
+| `telegram_send.sh` | `source scripts/telegram_send.sh` | Telegram Bot API helpers: `tg_send_message`, `tg_send_file`, `tg_send_audio`. Uses curl directly — no OpenClaw gateway dependency. `sendAudio` gives inline player for podcasts. |
 | `fetch_and_deliver.sh` | `bash scripts/fetch_and_deliver.sh <category> <artifact>` | Fetch latest artifact + deliver via Telegram. Handles daily/research/news branching. |
-| `nlm_ensure_auth.sh` | `bash scripts/nlm_ensure_auth.sh` | 4-layer NLM auth recovery: quick check, cookie rotation, CDP extraction, headless login. Exit 1 = all failed. |
+| `nlm_ensure_auth.sh` | `bash scripts/nlm_ensure_auth.sh` | 5-layer NLM auth recovery: (1) quick check, (2) cookie rotation, (3) CDP extraction, (4) `nlm login` via Chrome CDP, (5) Playwright `--sync-auth` with auto-login. Exit 1 = all failed + Telegram alert. |
 | `nlm_rotate_cookies.py` | `.venv/bin/python3 scripts/nlm_rotate_cookies.py [--check\|--verify\|--cdp]` | Rotates Google PSIDTS cookies via RotateCookies endpoint. Falls back to CDP. |
 | `nlm_download_audio.py` | `.venv/bin/python3 scripts/nlm_download_audio.py <notebook> --output <path>` | Downloads NLM audio via Chrome CDP cookies (workaround for httpx TooManyRedirects). |
 | `nlm_create_report.sh` | `bash scripts/nlm_create_report.sh <notebook-id> [prompt-file]` | Creates NLM report with custom prompt. Defaults to weekly prompt; pass `config/prompts/daily-report-prompt-v3.txt` for daily. |
@@ -166,7 +168,7 @@ openclaw-research/
 | `hf_triage.py` | `.venv/bin/python3 scripts/hf_triage.py [--no-llm] [--batch-size 100] [--dry-run]` | Batch content classifier. Domain rules + local Qwen2.5-7B-Instruct for uncertain items. Outputs `data/triage-results.json`. Runs as Step 2.5 in weekly pipeline. |
 | `magazine_generator.py` | `.venv/bin/python3 scripts/magazine_generator.py [--date YYYY-MM-DD] [--no-openai] [--pdf] [--dry-run]` | Builds magazine JSON from triage results + NLM report. GPT-4o writes editorial brief, section intros, section previews, and item briefs. Selects top 3-5 stories for front page. Cross-section URL dedup (first section wins). Featured items capped at 3 per section. `--pdf` renders via WeasyPrint. |
 | `pipeline_alert.sh` | `bash scripts/pipeline_alert.sh "<message>"` | Sends Telegram alert on pipeline failure. |
-| `nlm_playwright.py` | `.venv/bin/python3 scripts/nlm_playwright.py --create "Title" --add-urls URL... [--headless] [--cdp-url URL]` | NLM browser automation via Playwright. Full workflow: login, notebook, sources, report, podcast, download, share. Fixes BUG-001 (audio download). Logs to `data/nlm-operations-log.json`. Auth: run `--login` once (headed), use `--cdp-url` to connect to Chrome with debug port, or store credentials in `config/google-credentials.json` for auto-login when session expires. |
+| `nlm_playwright.py` | `.venv/bin/python3 scripts/nlm_playwright.py --create "Title" --add-urls URL... [--headless] [--cdp-url URL]` | NLM browser automation via Playwright. Full workflow: login, notebook, sources, report, podcast, download, share. Fixes BUG-001 (audio download). `--sync-auth` syncs Playwright cookies to nlm CLI format (Layer 5 of auth recovery). Auto-cleans stale profile lock files. Logs to `data/nlm-operations-log.json`. |
 
 ## LLM Provider
 
@@ -176,7 +178,7 @@ openclaw-research/
 
 ## Environment Variables
 
-All user config lives in a single file: **`.env`** (copy from `.env.example`). This includes `OPENAI_API_KEY`, `TELEGRAM_CHAT_ID`, and optionally `PROJECT_ROOT`.
+All user config lives in a single file: **`.env`** (copy from `.env.example`). This includes `OPENAI_API_KEY`, `TELEGRAM_CHAT_ID`, `TELEGRAM_BOT_TOKEN`, and optionally `PROJECT_ROOT`.
 
 Shell scripts and SKILL.md preambles source `config/env.sh`, a thin loader that:
 1. Auto-detects `PROJECT_ROOT` from its own file location (works in both bash and zsh)
@@ -189,8 +191,6 @@ source "$PROJECT_ROOT/config/env.sh"
 ```
 
 You do **not** need to set `PROJECT_ROOT` in `.env` when running from within the project directory — it's auto-detected. Set it only if running scripts from an external location.
-
-In Docker, `PROJECT_ROOT=/app` is set automatically via the Dockerfile.
 
 ## Prerequisites
 
@@ -244,7 +244,7 @@ In Docker, `PROJECT_ROOT=/app` is set automatically via the Dockerfile.
 | `digest-deliver` | Downloads artifacts (MP3, reports), compresses podcasts via ffmpeg, delivers via Telegram, triggers RAG indexing. |
 | `blog-monitor` | `blog_monitor.py` — monitors 7 AI company blog RSS feeds + HTML scraping. Config in `data/feeds.json`. |
 | `newsletter-monitor` | `newsletter_parser.py` — fetches Gmail IMAP, extracts links, classifies and routes to sources or news queue. |
-| `daily-digest` | Daily 6 PM ET pipeline. Collects today's items, generates magazine PDF, NLM notebook + report + podcast. |
+| `daily-digest` | Daily 11 AM ET pipeline. Collects last 2 days' items, generates magazine HTML/PDF, NLM notebook + report + podcast. |
 | `news-digest` | Weekly news roundup from `news-queue.json`. Creates NLM notebook + deep-dive podcast. Requires 3+ articles. |
 | `chat-rag` | Notebook-routed RAG queries. ChromaDB identifies notebooks, NLM provides deep answers with citations. |
 
@@ -501,50 +501,45 @@ nlm research import research <task-id>
 nlm share public <notebook-id>
 ```
 
-## Cron Jobs
+## Scheduled Pipelines (macOS launchd)
 
-Both cron jobs use deterministic shell scripts (not agent-interpreted skills) to avoid path resolution issues in isolated sessions.
+Both pipelines use macOS launchd (not cron — cron lacks TCC permissions for external volumes). Delivery uses direct Telegram Bot API via `scripts/telegram_send.sh` (no OpenClaw gateway dependency).
 
-### Daily Tech Feed — 6 PM ET, every day
+### Daily Tech Feed — 11 AM ET, every day
 
-Pipeline script: `scripts/daily_pipeline.sh` (Steps 0-10 from `skills/daily-digest/SKILL.md`)
+Plist: `~/Library/LaunchAgents/com.openclaw.daily-pipeline.plist`
 
 ```bash
-openclaw cron add \
-  --name "daily-tech-feed" \
-  --cron "0 18 * * *" \
-  --tz "America/New_York" \
-  --session isolated \
-  --message "Run the daily tech feed pipeline. Execute: bash /Volumes/ext/projects/openclaw-research/scripts/daily_pipeline.sh" \
-  --announce \
-  --channel telegram
-```
+# Install
+launchctl load ~/Library/LaunchAgents/com.openclaw.daily-pipeline.plist
 
-Manual run: `bash scripts/daily_pipeline.sh` (add `--skip-nlm` or `--pdf-only` or `--date YYYY-MM-DD`)
+# Manual run
+bash scripts/daily_pipeline.sh  # add --skip-nlm, --pdf-only, --date YYYY-MM-DD, --use-playwright
+```
 
 ### Weekly Research Digest — Saturday 9 AM ET
 
-Pipeline script: `scripts/weekly_pipeline.sh` (10-step pipeline: archive, newsletters, blogs, x-monitor, HF triage, data triage, content-processor, NLM orchestrator, magazine generator, news digest, delivery)
+Plist: `~/Library/LaunchAgents/com.openclaw.weekly-pipeline.plist`
 
 ```bash
-openclaw cron add \
-  --name "weekly-research-digest" \
-  --cron "0 9 * * 6" \
-  --tz "America/New_York" \
-  --session isolated \
-  --message "Run the weekly research digest pipeline. Execute: bash /Volumes/ext/projects/openclaw-research/scripts/weekly_pipeline.sh" \
-  --announce \
-  --channel telegram
+# Install
+launchctl load ~/Library/LaunchAgents/com.openclaw.weekly-pipeline.plist
+
+# Manual run
+bash scripts/weekly_pipeline.sh  # add --skip-nlm, --dry-run
 ```
 
-Manual run: `bash scripts/weekly_pipeline.sh` (add `--skip-nlm` or `--dry-run`)
-
-### Manage cron jobs
+### Manage
 ```bash
-openclaw cron list
-openclaw cron remove daily-tech-feed
-openclaw cron remove weekly-research-digest
+launchctl list | grep openclaw                    # Check status
+launchctl unload ~/Library/LaunchAgents/com.openclaw.daily-pipeline.plist   # Stop
+launchctl load ~/Library/LaunchAgents/com.openclaw.daily-pipeline.plist     # Start
 ```
+
+### Why launchd, not cron?
+- macOS cron lacks Full Disk Access (TCC) — gets "Operation not permitted" on `/Volumes/ext/`
+- launchd agents run as the user and inherit TCC permissions
+- launchd catches up on missed schedules after sleep/wake (cron does not)
 
 ## Workspace Files
 
@@ -562,15 +557,18 @@ The OpenClaw LLM agent reads these files from `~/.openclaw/workspace/` at sessio
 
 ### Sending Files to Telegram
 
-The LLM agent has two ways to communicate with Telegram:
-- **Text replies**: Just output text — OpenClaw auto-routes to the originating Telegram chat.
-- **File attachments** (PDF, MP3, images): Must use `openclaw message send --media` CLI:
-  ```bash
-  openclaw message send --channel telegram --target <chat_id> --media /path/to/file --message "optional caption"
-  ```
-  The `--target` is the numeric Telegram chat ID. Find it in `sessions.json` under `deliveryContext.to` (strip `telegram:` prefix).
+Pipeline scripts use `scripts/telegram_send.sh` for direct Telegram Bot API delivery (no OpenClaw gateway dependency):
 
-TOOLS.md must include explicit `openclaw message send --media` commands after every artifact download step. Without this, the LLM will just print the file path as text.
+```bash
+source scripts/telegram_send.sh
+tg_send_message "text"                    # sendMessage
+tg_send_file "/path/to/file.pdf" "caption"  # sendDocument
+tg_send_audio "/path/to/podcast.mp3" "caption"  # sendAudio (inline player)
+```
+
+Requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` in `.env`.
+
+The OpenClaw LLM agent still uses text replies for interactive chat — OpenClaw auto-routes to the originating Telegram chat.
 
 ## OpenClaw Configuration
 
@@ -750,14 +748,10 @@ When registered via `nlm setup add claude-code`, Claude Code can call these tool
 - Verify accounts are active: send `list accounts` via Telegram
 - Check rate limits — Twitter API has strict limits
 
-### Files not delivered to Telegram (just text path shown)
-- **Root cause**: The LLM agent printed the file path as text instead of actually sending the file.
-- **Fix**: TOOLS.md must instruct the LLM to use `openclaw message send --media` for file delivery:
-  ```bash
-  openclaw message send --channel telegram --target <chat_id> --media /path/to/file.pdf --message "caption"
-  ```
-- The `--target` is the Telegram chat ID (found in `~/.openclaw/agents/main/sessions/sessions.json` under `deliveryContext.to`, strip the `telegram:` prefix).
-- Text replies are auto-routed to Telegram. File attachments require the explicit CLI command.
+### Files not delivered to Telegram
+- Pipeline scripts use `scripts/telegram_send.sh` for direct Bot API delivery (no OpenClaw gateway needed).
+- Check `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set in `.env`.
+- Use `tg_send_file` for documents, `tg_send_audio` for podcasts (inline player).
 - If files still don't appear: check that the file path exists and the file is not empty.
 
 ### Podcast too large for Telegram (>16MB)
@@ -779,64 +773,12 @@ When registered via `nlm setup add claude-code`, Claude Code can call these tool
 - Use `--id <artifact-id>` flag only if there are multiple artifacts and you need to pick one.
 - Always use full path: `~/.local/bin/nlm download ...`
 
-### Cron job not running
-- Verify: `openclaw cron list`
-- Check timezone setting
-- Ensure daemon is running: `openclaw daemon status`
-
-## Docker Deployment
-
-Build and run with Docker Compose:
-
-```bash
-cp .env.example .env   # Fill in OPENAI_API_KEY and TELEGRAM_CHAT_ID
-mkdir -p data rag/chroma_db
-docker compose build
-docker compose up -d
-```
-
-### Volume Mounts
-
-| Host Path | Container Path | Type | Purpose |
-|-----------|---------------|------|---------|
-| `./data` | `/app/data` | bind | Sources, notebooks, news queue |
-| `./rag/chroma_db` | `/app/rag/chroma_db` | bind | ChromaDB vector store |
-| `openclaw-home` | `/root/.openclaw` | named | OpenClaw config + sessions |
-| `nlm-auth` | `/root/.notebooklm-mcp` | named | NotebookLM auth tokens |
-| `~/.openclaw/openclaw.json` | `/root/.openclaw/openclaw.json` | bind (ro) | Gateway config |
-| `~/.config/openclaw-research/` | `/root/.config/openclaw-research/` | bind (ro) | Email credentials |
-| `~/.openclaw/workspace/*.md` | `/root/.openclaw/workspace/*.md` | bind (ro) | Workspace files (TOOLS.md, IDENTITY.md, etc.) |
-| `./CLAUDE.md` | `/root/.openclaw/workspace/RESEARCH.md` | bind (ro) | Project reference (replaces symlink) |
-| `~/.openclaw/extensions/` | `/root/.openclaw/extensions/` | bind (ro) | Gateway plugins (gateway-health) |
-
-### Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OPENAI_API_KEY` | Yes | OpenAI API key for LLM + embeddings |
-| `TELEGRAM_CHAT_ID` | Yes | Telegram chat ID for alerts and delivery |
-| `PROJECT_ROOT` | Auto | Set to `/app` in container |
-| `CHROME_PATH` | Auto | Set to `/usr/bin/chromium` in container |
-
-### macOS vs Docker Differences
-
-| Aspect | macOS | Docker |
-|--------|-------|--------|
-| WeasyPrint | Needs `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` | Works out of the box (apt pango) |
-| Chrome | System Chrome or Homebrew Chromium | `/usr/bin/chromium` (Debian package) |
-| FFmpeg | `/opt/homebrew/bin/ffmpeg` | `/usr/bin/ffmpeg` |
-| nlm auth | Browser-based login | `docker compose exec openclaw-research nlm login` |
-| mlx-lm | Available (Apple Silicon) | Excluded — classifier uses domain rules + title heuristics only |
-| TCC/FDA | External volumes may need Full Disk Access | No restrictions inside container |
-
-### Useful Docker Commands
-
-```bash
-docker compose logs -f                    # Follow logs
-docker compose exec openclaw-research bash  # Shell into container
-docker compose exec openclaw-research nlm login  # Re-authenticate NLM
-docker compose run --rm openclaw-research .venv/bin/python3 scripts/list_queued.py  # Run a script
-```
+### Scheduled pipeline not running
+- Verify launchd agents: `launchctl list | grep openclaw`
+- Check stderr logs: `cat /tmp/openclaw-daily-pipeline.err`
+- macOS cron does NOT work for external volumes (TCC blocks `/Volumes/ext/`) — use launchd
+- If Mac was asleep at scheduled time, launchd catches up on wake (cron does not)
+- External volume must be mounted — check `ls /Volumes/ext/` before debugging further
 
 ## Setup
 
@@ -850,10 +792,10 @@ Or manually:
 2. `uv tool install notebooklm-mcp-cli` then `nlm login` and `nlm setup add claude-code`
 3. `npx clawhub@latest install aisa-twitter-api`
 4. `pip install chromadb openai`
-5. Configure `~/.openclaw/openclaw.json` with Telegram bot token + OpenAI API key (see `config/openclaw-channel.json` for template)
-6. `export OPENAI_API_KEY='your-key'`
+5. Configure `.env` with `OPENAI_API_KEY`, `TELEGRAM_CHAT_ID`, `TELEGRAM_BOT_TOKEN`
+6. Configure `~/.openclaw/openclaw.json` with Telegram bot token + OpenAI API key
 7. `openclaw onboard --install-daemon`
-8. Add the cron job (see above)
+8. Install launchd agents (see Scheduled Pipelines section above)
 
 ## Security Considerations
 
@@ -880,7 +822,7 @@ When making code changes, check if these files need updating:
 | New script in `scripts/` | This file (Pipeline Scripts table), `backup.sh`, `restore.sh` |
 | New skill | This file (Skills table), `restore.sh` (symlink step) |
 | New data file | This file (Data Files table) |
-| New Python dependency | `pyproject.toml`, this file (External Dependencies), `Dockerfile`, `restore.sh` |
+| New Python dependency | `pyproject.toml`, this file (External Dependencies), `restore.sh` |
 | Pipeline step changes | `~/.openclaw/workspace/TOOLS.md`, relevant `skills/*/SKILL.md` |
 | New category | `data/categories.json`, this file (Categories table) |
 | Bug found/fixed | `docs/BUGS.md` |

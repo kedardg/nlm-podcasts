@@ -413,6 +413,7 @@ def tg_send(method, file_path, field, caption):
         print(f'  Telegram error: {e}')
         return False
 notebooks = json.load(open(f'{project}/data/notebooks.json'))
+all_reports = []  # (category_name, markdown_text) for consolidated report
 
 # Get recently created notebooks (from this run)
 recent = [nb for nb in notebooks.get('notebooks', []) if nb.get('status') == 'generating']
@@ -471,6 +472,7 @@ for nb in recent:
                       capture_output=True, text=True, timeout=60)
     if r.returncode == 0 and os.path.exists(report_md):
         print(f'  Report: downloaded')
+        all_reports.append((nb['category_name'], open(report_md).read()))
         # Render PDF
         report_pdf = f'{project}/data/{slug}-report.pdf'
         os.environ['DYLD_FALLBACK_LIBRARY_PATH'] = os.environ.get('DYLD_FALLBACK_LIBRARY_PATH', '') + ':/opt/homebrew/lib'
@@ -495,22 +497,66 @@ for nb in recent:
                    '--notebook-id', nb['id']],
                   capture_output=True, text=True, timeout=60)
 
-    # Send via Telegram (direct Bot API via curl)
+    # Send podcast via Telegram (per-category, individual delivery)
     if os.path.exists(podcast):
         if tg_send('sendAudio', podcast, 'audio', f'{nb[\"category_name\"]} Podcast'):
             print(f'  Telegram: podcast sent')
         else:
             print(f'  Telegram: podcast failed')
 
-    report_pdf = f'{project}/data/{slug}-report.pdf'
-    if os.path.exists(report_pdf):
-        if tg_send('sendDocument', report_pdf, 'document', f'{nb[\"category_name\"]} Report'):
-            print(f'  Telegram: report sent')
-        else:
-            print(f'  Telegram: report failed')
-
     # Update notebook status
     nb['status'] = 'complete'
+
+# --- Consolidated weekly report (HTML-first) ---
+if all_reports:
+    import re
+    from datetime import date as _date
+    week_date = _date.today().strftime('%Y-%m-%d')
+
+    parts = [f'# Weekly Research Digest \\u2014 {week_date}\\n']
+    for cat_name, text in all_reports:
+        parts.append(f'\\n---\\n\\n## {cat_name}\\n')
+        cleaned = re.sub(r'^#\\s+.*$', '', text, count=1, flags=re.MULTILINE).strip()
+        parts.append(cleaned)
+    consolidated_md = '\\n\\n'.join(parts)
+
+    md_path = f'{project}/data/weekly-report-{week_date}.md'
+    html_path = f'{project}/data/weekly-report-{week_date}.html'
+    pdf_path = f'{project}/data/weekly-report-{week_date}.pdf'
+
+    with open(md_path, 'w') as f:
+        f.write(consolidated_md)
+
+    env = {**os.environ, 'DYLD_FALLBACK_LIBRARY_PATH':
+           os.environ.get('DYLD_FALLBACK_LIBRARY_PATH', '') + ':/opt/homebrew/lib'}
+
+    # Render PDF (with TOC)
+    subprocess.run(
+        [f'{project}/.venv/bin/python3', f'{project}/lib/pdf_renderer.py',
+         '--input', md_path, '--output', pdf_path],
+        capture_output=True, text=True, timeout=120, env=env)
+
+    # Render standalone HTML
+    try:
+        from markdown_it import MarkdownIt
+        html_body = MarkdownIt().enable('table').render(consolidated_md)
+        css = open(f'{project}/templates/research-report.css').read()
+        full_html = f'<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>{css}</style></head><body>{html_body}</body></html>'
+        with open(html_path, 'w') as f:
+            f.write(full_html)
+    except Exception as e:
+        print(f'  HTML render failed: {e}')
+
+    # Deliver: HTML primary, PDF fallback
+    delivered = False
+    if os.path.exists(html_path):
+        delivered = tg_send('sendDocument', html_path, 'document',
+                           f'Weekly Research Digest \\u2014 {week_date}')
+    if not delivered and os.path.exists(pdf_path):
+        delivered = tg_send('sendDocument', pdf_path, 'document',
+                           f'Weekly Research Digest \\u2014 {week_date}')
+    print(f'\\nConsolidated report: {len(all_reports)} categories' +
+          (' \\u2014 delivered' if delivered else ' \\u2014 delivery failed'))
 
 # Save updated registry
 json.dump(notebooks, open(f'{project}/data/notebooks.json', 'w'), indent=2)

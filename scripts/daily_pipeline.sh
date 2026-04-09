@@ -494,7 +494,7 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
     else
         # Wait for audio to be ready (poll up to 10 min with 30s intervals)
         AUDIO_WAIT=0
-        AUDIO_MAX=600
+        AUDIO_MAX=1800
         while [[ $AUDIO_WAIT -lt $AUDIO_MAX ]]; do
             ensure_auth_or_rotate || true
             AUDIO_STATUS=$($NLM studio status "$NOTEBOOK_ID" 2>&1)
