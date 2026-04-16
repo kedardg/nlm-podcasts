@@ -415,10 +415,18 @@ def tg_send(method, file_path, field, caption):
 notebooks = json.load(open(f'{project}/data/notebooks.json'))
 all_reports = []  # (category_name, markdown_text) for consolidated report
 
-# Get recently created notebooks (from this run)
-recent = [nb for nb in notebooks.get('notebooks', []) if nb.get('status') == 'generating']
+# Scope delivery to THIS run only. Prior runs that died before flipping
+# their 'generating' entries to 'complete' would otherwise get re-delivered,
+# polluting this week's digest with stale content.
+current_run_id = 'weekly_$DATE'
+for nb in notebooks.get('notebooks', []):
+    if nb.get('status') == 'generating' and nb.get('run_id') != current_run_id:
+        nb['status'] = 'abandoned'
+
+recent = [nb for nb in notebooks.get('notebooks', [])
+          if nb.get('status') == 'generating' and nb.get('run_id') == current_run_id]
 if not recent:
-    print('No notebooks pending delivery')
+    print('No notebooks pending delivery for run', current_run_id)
     exit(0)
 
 # Poll for completion (max 10 minutes)

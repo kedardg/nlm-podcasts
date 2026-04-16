@@ -235,7 +235,7 @@ init_json "$DATA_DIR/sources.json" '{"sources":[]}'
 init_json "$DATA_DIR/accounts.json" '{"accounts":[]}'
 init_json "$DATA_DIR/notebooks.json" '{"notebooks":[]}'
 init_json "$DATA_DIR/processing-log.json" '{"runs":[]}'
-init_json "$DATA_DIR/news-queue.json" '{"items":[]}'
+init_json "$DATA_DIR/news-queue.json" '{"articles":[]}'
 init_json "$DATA_DIR/newsletters.json" '{"newsletters":[]}'
 
 if [ -f "$DATA_DIR/categories.json" ]; then

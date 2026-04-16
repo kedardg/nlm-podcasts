@@ -28,6 +28,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from lib.file_utils import load_json, save_json, now_iso
 from lib.log_utils import StepTimer
+from lib.url_utils import normalize_url_deep
 
 try:
     import llm_tracer
@@ -93,15 +94,18 @@ def group_items_by_section(triage_items, section_map):
             section = "News"
         sections[section].append(item)
 
-    # Dedup: iterate in SECTION_ORDER so first section wins
+    # Dedup: iterate in SECTION_ORDER so first section wins.
+    # Key on the canonical URL so arXiv abs/pdf/html variants, GitHub casing,
+    # and tracking-param URLs don't slip through as separate entries.
     deduped = {s: [] for s in SECTION_ORDER}
     for section_name in SECTION_ORDER:
         for item in sections[section_name]:
             url = item.get("url", "")
-            if url and url in seen_urls:
+            norm = normalize_url_deep(url) if url else ""
+            if norm and norm in seen_urls:
                 continue
-            if url:
-                seen_urls.add(url)
+            if norm:
+                seen_urls.add(norm)
             deduped[section_name].append(item)
 
     return deduped
@@ -140,35 +144,38 @@ def select_top_stories(sections: list[dict], max_stories: int = 5) -> list[dict]
     top = []
     used_sections = set()
 
-    # Step 1: Add featured, preferring section diversity
-    # Sort featured: items from unseen sections first, then by confidence
+    # Diversity key: unseen-section items win, confidence breaks ties.
+    # Must be re-evaluated after each pick because `used_sections` grows;
+    # sorting once (as in the original implementation) lets one section
+    # monopolize the front page when all its items start unseen.
     def diversity_key(item):
         section_seen = item["section"] in used_sections
         return (section_seen, -item.get("confidence", 0))
 
-    for item in sorted(featured, key=diversity_key):
-        if len(top) >= max_stories:
-            break
-        top.append(item)
-        used_sections.add(item["section"])
+    def pick_with_diversity(pool, limit):
+        """Consume `pool` one item at a time, re-ranking by diversity each round."""
+        remaining = list(pool)
+        while remaining and len(top) < limit:
+            remaining.sort(key=diversity_key)
+            choice = remaining.pop(0)
+            top.append(choice)
+            used_sections.add(choice["section"])
 
-    # Step 2: If <3, fill from standard research
+    # Step 1: Add featured (cap at max_stories)
+    pick_with_diversity(featured, max_stories)
+
+    # Step 2: If <3, fill from standard research (dedup on url)
     if len(top) < 3:
-        for item in sorted(standard_research, key=diversity_key):
-            if len(top) >= max_stories:
-                break
-            if item.get("url") and any(t.get("url") == item["url"] for t in top):
-                continue
-            top.append(item)
-            used_sections.add(item["section"])
-            if len(top) >= 3:
-                break
+        taken_urls = {t.get("url") for t in top if t.get("url")}
+        fill_pool = [i for i in standard_research if i.get("url") not in taken_urls]
+        pick_with_diversity(fill_pool, max(3, len(top)))
 
-    # Step 3: At most 1 non-research item
+    # Step 3: At most 1 non-research item, only if none already present
     non_research_count = sum(1 for t in top if t.get("content_type") != "research")
     if non_research_count == 0 and len(top) < max_stories:
+        taken_urls = {t.get("url") for t in top if t.get("url")}
         for item in non_research_with_summary:
-            if item.get("url") and any(t.get("url") == item["url"] for t in top):
+            if item.get("url") in taken_urls:
                 continue
             top.append(item)
             break
@@ -195,8 +202,11 @@ def build_magazine_items(section_items, nlm_url_map):
         content_type = item.get("classification", {}).get("content_type", "news")
         confidence = item.get("classification", {}).get("confidence", 0.5)
 
-        # Check if NLM has a summary for this URL
-        nlm_data = nlm_url_map.get(url, {})
+        # NLM's url_map is keyed on canonical URLs (via normalize_url_deep).
+        # Triage items carry the raw source URL, so we must normalize here
+        # before probing — otherwise arXiv/GitHub/newsletter variants miss
+        # and research items silently fall back to empty GPT briefs.
+        nlm_data = nlm_url_map.get(normalize_url_deep(url) if url else "", {})
         nlm_summary = nlm_data.get("summary", "")
         nlm_significance = nlm_data.get("significance", "medium")
 

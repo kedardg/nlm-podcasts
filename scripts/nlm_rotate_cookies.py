@@ -29,12 +29,21 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from lib.file_utils import save_json  # noqa: E402
+
 # Cookie storage paths (matches NLM CLI layout)
 NLM_DIR = Path.home() / ".notebooklm-mcp-cli"
 PROFILE_DIR = NLM_DIR / "profiles" / "default"
 COOKIES_FILE = PROFILE_DIR / "cookies.json"
 METADATA_FILE = PROFILE_DIR / "metadata.json"
 AUTH_CACHE_FILE = NLM_DIR / "auth.json"
+
+# Sensitive-file permissions: owner read/write only.
+SECRET_FILE_MODE = 0o600
+SECRET_DIR_MODE = 0o700
 
 ROTATE_URL = "https://accounts.google.com/RotateCookies"
 ROTATE_BODY = '[000,"-0000000000000000000"]'
@@ -61,28 +70,43 @@ def load_cookies() -> dict[str, str] | None:
     return None
 
 
+def _secure_dir(path: Path) -> None:
+    """Ensure ``path`` exists and is owner-only (0o700)."""
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(path, SECRET_DIR_MODE)
+    except OSError:
+        # Best-effort — e.g. a network mount that ignores chmod.
+        pass
+
+
 def save_cookies(cookies: dict[str, str]) -> None:
-    """Save updated cookies to NLM CLI profile and auth cache."""
-    # Update profile cookies.json
-    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-    COOKIES_FILE.write_text(json.dumps(cookies, indent=2))
+    """Save updated cookies to NLM CLI profile and auth cache.
+
+    Writes are atomic (tmp + rename via ``save_json``) and use mode 0600 so
+    live Google session cookies are not world-readable under the default
+    umask. Profile and cache directories are enforced to 0700.
+    """
+    _secure_dir(PROFILE_DIR)
+    save_json(COOKIES_FILE, cookies, mode=SECRET_FILE_MODE)
 
     # Update metadata timestamp
     if METADATA_FILE.exists():
         try:
             meta = json.loads(METADATA_FILE.read_text())
             meta["last_validated"] = datetime.now().isoformat()
-            METADATA_FILE.write_text(json.dumps(meta, indent=2))
+            save_json(METADATA_FILE, meta, mode=SECRET_FILE_MODE)
         except (json.JSONDecodeError, KeyError):
             pass
 
     # Also update auth.json cache if it exists
     if AUTH_CACHE_FILE.exists():
+        _secure_dir(NLM_DIR)
         try:
             cache = json.loads(AUTH_CACHE_FILE.read_text())
             cache["cookies"] = cookies
             cache["extracted_at"] = time.time()
-            AUTH_CACHE_FILE.write_text(json.dumps(cache, indent=2))
+            save_json(AUTH_CACHE_FILE, cache, mode=SECRET_FILE_MODE)
         except (json.JSONDecodeError, KeyError):
             pass
 
