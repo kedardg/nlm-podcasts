@@ -17,7 +17,7 @@ This auto-detects `PROJECT_ROOT` and loads all variables from `.env` (including 
 For EVERY incoming message, your FIRST action must be to run the deterministic router:
 
 ```bash
-python3 $PROJECT_ROOT/router.py "<user_message>"
+python3 $PROJECT_ROOT/src/router.py "<user_message>"
 ```
 
 The router returns JSON:

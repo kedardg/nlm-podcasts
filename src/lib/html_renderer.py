@@ -22,7 +22,7 @@ from lib.pdf_renderer import (
     DOMAIN_COLOR_DEFAULT,
 )
 
-TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 
 # Map section names to data-section slugs for CSS theming
 _SECTION_SLUG = {

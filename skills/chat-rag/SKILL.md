@@ -40,12 +40,12 @@ Parse the category slug (text before the colon) and validate it exists in `data/
 Run the notebook routing query:
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/rag/query.py "<question>" --mode notebook
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/rag/query.py "<question>" --mode notebook
 ```
 
 If targeted to a category, add the category filter:
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/rag/query.py "<question>" --mode notebook --category "<category-slug>"
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/rag/query.py "<question>" --mode notebook --category "<category-slug>"
 ```
 
 This returns JSON identifying which notebooks are most relevant:

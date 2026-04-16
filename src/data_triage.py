@@ -22,7 +22,7 @@ from pathlib import Path
 from lib.file_utils import load_json, save_json, now_iso
 from lib.url_utils import normalize_url_deep, dedup_urls
 
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 SOURCES_FILE = DATA_DIR / "sources.json"
 NEWS_QUEUE_FILE = DATA_DIR / "news-queue.json"

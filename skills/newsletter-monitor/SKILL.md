@@ -21,7 +21,7 @@ This skill runs as part of the weekly processing pipeline (Saturday 9AM) or when
 Run the newsletter parser script:
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/newsletter_parser.py
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/newsletter_parser.py
 ```
 
 ### Options

@@ -101,9 +101,9 @@ step_end() {
 ensure_auth_or_rotate() {
     $NLM login --check 2>/dev/null && return 0
     log "  Auth expired, rotating..."
-    $PYTHON "$PROJECT_ROOT/scripts/nlm_rotate_cookies.py" --verify 2>/dev/null && return 0
+    $PYTHON "$PROJECT_ROOT/src/nlm/nlm_rotate_cookies.py" --verify 2>/dev/null && return 0
     log "  Rotation failed, trying CDP..."
-    $PYTHON "$PROJECT_ROOT/scripts/nlm_rotate_cookies.py" --cdp --verify 2>/dev/null && return 0
+    $PYTHON "$PROJECT_ROOT/src/nlm/nlm_rotate_cookies.py" --cdp --verify 2>/dev/null && return 0
     return 1
 }
 
@@ -133,18 +133,18 @@ echo ""
 # ── Step 0: Fetch fresh newsletter emails ──────────────────────
 log "Step 0: Fetch newsletters"
 step_start "newsletter_fetch"
-$PYTHON "$PROJECT_ROOT/newsletter_parser.py" 2>&1 && { step_ok "newsletter-fetch"; step_end "newsletter_fetch" "ok"; } || { step_fail "newsletter-fetch"; step_end "newsletter_fetch" "fail"; }
+$PYTHON "$PROJECT_ROOT/src/newsletter_parser.py" 2>&1 && { step_ok "newsletter-fetch"; step_end "newsletter_fetch" "ok"; } || { step_fail "newsletter-fetch"; step_end "newsletter_fetch" "fail"; }
 echo ""
 
 # ── Step 0.5: Blog monitor ───────────────────────────────────
 log "Step 0.5: Blog monitor"
 step_start "blog_monitor"
-$PYTHON "$PROJECT_ROOT/blog_monitor.py" 2>&1 && { step_ok "blog-monitor"; step_end "blog_monitor" "ok"; } || { step_fail "blog-monitor"; step_end "blog_monitor" "fail"; }
+$PYTHON "$PROJECT_ROOT/src/blog_monitor.py" 2>&1 && { step_ok "blog-monitor"; step_end "blog_monitor" "ok"; } || { step_fail "blog-monitor"; step_end "blog_monitor" "fail"; }
 echo ""
 
 # ── Step 1: Generate daily feed HTML ────────────────────────────
 log "Step 1: Generate daily feed (markdown + HTML)"
-DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/daily_feed_generator.py" \
+DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/src/daily_feed_generator.py" \
     --pdf-only --date "$DATE" 2>&1
 STEP1_EXIT=$?
 
@@ -182,7 +182,7 @@ if $USE_PLAYWRIGHT && ! $SKIP_NLM; then
     step_start "playwright_nlm"
 
     # Build command
-    PW_CMD=("$PYTHON" "$PROJECT_ROOT/scripts/nlm_playwright.py"
+    PW_CMD=("$PYTHON" "$PROJECT_ROOT/src/nlm/nlm_playwright.py"
         --create "Daily Feed — $DATE"
         --headless
         --download-dir "$FEED_DIR"
@@ -274,7 +274,7 @@ for u in urls:
     # Magazine PDF (same as CLI path)
     if [[ -f "$REPORT_MD" ]]; then
         log "Step 6.5: Generate magazine HTML"
-        DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/daily_feed_generator.py" \
+        DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/src/daily_feed_generator.py" \
             --date "$DATE" --pdf-only 2>&1 && \
             step_ok "magazine-html" || step_fail "magazine-html"
         echo ""
@@ -431,7 +431,7 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
             AUTH_FAILURES=$((AUTH_FAILURES + 1))
             if [[ $AUTH_FAILURES -le 2 ]]; then
                 log "  Auth expired during poll — rotating cookies (attempt $AUTH_FAILURES)..."
-                $PYTHON "$PROJECT_ROOT/scripts/nlm_rotate_cookies.py" --verify 2>&1 || true
+                $PYTHON "$PROJECT_ROOT/src/nlm/nlm_rotate_cookies.py" --verify 2>&1 || true
                 sleep 5
                 WAITED=$((WAITED + 5))
                 continue
@@ -475,12 +475,12 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
         step_ok "report-download"
 
         # Enhance report
-        if [[ -f "$PROJECT_ROOT/scripts/enhance_report.py" ]]; then
-            $PYTHON "$PROJECT_ROOT/scripts/enhance_report.py" --input "$REPORT_MD" 2>&1 || true
+        if [[ -f "$PROJECT_ROOT/src/pipeline/enhance_report.py" ]]; then
+            $PYTHON "$PROJECT_ROOT/src/pipeline/enhance_report.py" --input "$REPORT_MD" 2>&1 || true
         fi
 
         # Render report PDF
-        DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/lib/pdf_renderer.py" \
+        DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/src/lib/pdf_renderer.py" \
             --input "$REPORT_MD" --output "$REPORT_PDF" 2>&1 && \
             step_ok "report-pdf" || step_fail "report-pdf"
     else
@@ -512,13 +512,13 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
         # Fallback 1: CDP (uses Chrome session cookies)
         if [[ ! -s "$PODCAST_RAW" ]]; then
             log "  nlm download failed — trying CDP..."
-            $PYTHON "$PROJECT_ROOT/scripts/nlm_download_audio.py" "$NOTEBOOK_ID" --output "$PODCAST_RAW" 2>&1
+            $PYTHON "$PROJECT_ROOT/src/nlm/nlm_download_audio.py" "$NOTEBOOK_ID" --output "$PODCAST_RAW" 2>&1
         fi
         # Fallback 2: Playwright (works without Chrome CDP)
         if [[ ! -s "$PODCAST_RAW" ]]; then
             log "  CDP download failed — falling back to Playwright..."
             ensure_auth_or_rotate || true
-            $PYTHON "$PROJECT_ROOT/scripts/nlm_playwright.py" \
+            $PYTHON "$PROJECT_ROOT/src/nlm/nlm_playwright.py" \
                 --open "$NOTEBOOK_ID" \
                 --headless \
                 --download-dir "$FEED_DIR" \
@@ -539,7 +539,7 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
     # ── Step 6.5: Magazine PDF (NLM-first layout) ──────────────
     if [[ -f "$REPORT_MD" ]]; then
         log "Step 6.5: Generate magazine HTML"
-        DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/daily_feed_generator.py" \
+        DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/src/daily_feed_generator.py" \
             --date "$DATE" --pdf-only 2>&1 && \
             step_ok "magazine-html" || step_fail "magazine-html"
         echo ""
@@ -647,9 +647,9 @@ print('  Notebook registered')
 fi
 
 # ── Step 10.5: Index report into RAG (after notebook registration) ──
-if [[ -n "$NOTEBOOK_ID" ]] && [[ -f "$REPORT_MD" ]] && [[ -f "$PROJECT_ROOT/scripts/index_notebook.py" ]]; then
+if [[ -n "$NOTEBOOK_ID" ]] && [[ -f "$REPORT_MD" ]] && [[ -f "$PROJECT_ROOT/src/pipeline/index_notebook.py" ]]; then
     log "Step 10.5: Index report in RAG"
-    $PYTHON "$PROJECT_ROOT/scripts/index_notebook.py" \
+    $PYTHON "$PROJECT_ROOT/src/pipeline/index_notebook.py" \
         --notebook-id "$NOTEBOOK_ID" --report-file "$REPORT_MD" 2>&1 && \
         step_ok "rag-index" || step_fail "rag-index"
     echo ""

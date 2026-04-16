@@ -39,7 +39,7 @@ try:
 except ImportError:
     _WeasyHTML = None
 
-PROJECT_ROOT = Path(__file__).parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_CSS = PROJECT_ROOT / "templates" / "daily-feed.css"
 REPORT_CSS = PROJECT_ROOT / "templates" / "research-report.css"
 

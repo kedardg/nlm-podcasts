@@ -24,8 +24,8 @@ import chromadb
 from openai import OpenAI
 
 # Paths
-PROJECT_ROOT = Path(__file__).parent.parent
-CHROMA_DB_PATH = Path(__file__).parent / "chroma_db"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+CHROMA_DB_PATH = PROJECT_ROOT / "rag" / "chroma_db"
 NOTEBOOKS_FILE = PROJECT_ROOT / "data" / "notebooks.json"
 COLLECTION_NAME = "research_reports"
 NOTEBOOK_SOURCES_COLLECTION = "notebook_sources"

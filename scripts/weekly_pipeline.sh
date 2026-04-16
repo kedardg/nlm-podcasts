@@ -63,9 +63,9 @@ log_json() {
 ensure_auth_or_rotate() {
     $NLM login --check 2>/dev/null && return 0
     log "  Auth expired, rotating..."
-    $PYTHON "$PROJECT_ROOT/scripts/nlm_rotate_cookies.py" --verify 2>/dev/null && return 0
+    $PYTHON "$PROJECT_ROOT/src/nlm/nlm_rotate_cookies.py" --verify 2>/dev/null && return 0
     log "  Rotation failed, trying CDP..."
-    $PYTHON "$PROJECT_ROOT/scripts/nlm_rotate_cookies.py" --cdp --verify 2>/dev/null && return 0
+    $PYTHON "$PROJECT_ROOT/src/nlm/nlm_rotate_cookies.py" --cdp --verify 2>/dev/null && return 0
     return 1
 }
 
@@ -94,24 +94,24 @@ echo ""
 
 # ── Step 0: Archive old news ─────────────────────────────────
 log "Step 0: Archive old news (>30 days)"
-$PYTHON "$PROJECT_ROOT/scripts/archive_old_news.py" --days 30 2>&1 && step_ok "archive-old-news" || step_fail "archive-old-news"
+$PYTHON "$PROJECT_ROOT/src/pipeline/archive_old_news.py" --days 30 2>&1 && step_ok "archive-old-news" || step_fail "archive-old-news"
 echo ""
 
 # ── Step 1: Newsletter Monitor ────────────────────────────────
 log "Step 1: Newsletter Monitor"
 if $DRY_RUN; then
-    $PYTHON "$PROJECT_ROOT/newsletter_parser.py" --check 2>&1 && step_ok "newsletter-monitor (dry run)" || step_fail "newsletter-monitor"
+    $PYTHON "$PROJECT_ROOT/src/newsletter_parser.py" --check 2>&1 && step_ok "newsletter-monitor (dry run)" || step_fail "newsletter-monitor"
 else
-    $PYTHON "$PROJECT_ROOT/newsletter_parser.py" 2>&1 && step_ok "newsletter-monitor" || step_fail "newsletter-monitor"
+    $PYTHON "$PROJECT_ROOT/src/newsletter_parser.py" 2>&1 && step_ok "newsletter-monitor" || step_fail "newsletter-monitor"
 fi
 echo ""
 
 # ── Step 1.5: Blog Monitor ───────────────────────────────────
 log "Step 1.5: Blog Monitor"
 if $DRY_RUN; then
-    $PYTHON "$PROJECT_ROOT/blog_monitor.py" --check 2>&1 && step_ok "blog-monitor (dry run)" || step_fail "blog-monitor"
+    $PYTHON "$PROJECT_ROOT/src/blog_monitor.py" --check 2>&1 && step_ok "blog-monitor (dry run)" || step_fail "blog-monitor"
 else
-    $PYTHON "$PROJECT_ROOT/blog_monitor.py" 2>&1 && step_ok "blog-monitor" || step_fail "blog-monitor"
+    $PYTHON "$PROJECT_ROOT/src/blog_monitor.py" 2>&1 && step_ok "blog-monitor" || step_fail "blog-monitor"
 fi
 echo ""
 
@@ -141,27 +141,27 @@ echo ""
 # ── Step 2.5: HF Triage (content classification) ─────────────
 log "Step 2.5: HF Triage"
 if $DRY_RUN; then
-    $PYTHON "$PROJECT_ROOT/scripts/hf_triage.py" --dry-run --no-llm 2>&1 && step_ok "hf-triage (dry run)" || step_fail "hf-triage"
+    $PYTHON "$PROJECT_ROOT/src/pipeline/hf_triage.py" --dry-run --no-llm 2>&1 && step_ok "hf-triage (dry run)" || step_fail "hf-triage"
 else
-    $PYTHON "$PROJECT_ROOT/scripts/hf_triage.py" 2>&1 && step_ok "hf-triage" || step_fail "hf-triage"
+    $PYTHON "$PROJECT_ROOT/src/pipeline/hf_triage.py" 2>&1 && step_ok "hf-triage" || step_fail "hf-triage"
 fi
 echo ""
 
 # ── Step 3: Data Triage ───────────────────────────────────────
 log "Step 3: Data Triage"
 if $DRY_RUN; then
-    $PYTHON "$PROJECT_ROOT/data_triage.py" --dry-run 2>&1 && step_ok "data-triage (dry run)" || step_fail "data-triage"
+    $PYTHON "$PROJECT_ROOT/src/data_triage.py" --dry-run 2>&1 && step_ok "data-triage (dry run)" || step_fail "data-triage"
 else
-    $PYTHON "$PROJECT_ROOT/data_triage.py" --auto 2>&1 && step_ok "data-triage" || step_fail "data-triage"
+    $PYTHON "$PROJECT_ROOT/src/data_triage.py" --auto 2>&1 && step_ok "data-triage" || step_fail "data-triage"
 fi
 echo ""
 
 # ── Step 4: Content Processor ─────────────────────────────────
 log "Step 4: Content Processor"
 if $DRY_RUN; then
-    $PYTHON "$PROJECT_ROOT/scripts/content_processor.py" --dry-run 2>&1 && step_ok "content-processor (dry run)" || step_fail "content-processor"
+    $PYTHON "$PROJECT_ROOT/src/pipeline/content_processor.py" --dry-run 2>&1 && step_ok "content-processor (dry run)" || step_fail "content-processor"
 else
-    $PYTHON "$PROJECT_ROOT/scripts/content_processor.py" 2>&1 && step_ok "content-processor" || step_fail "content-processor"
+    $PYTHON "$PROJECT_ROOT/src/pipeline/content_processor.py" 2>&1 && step_ok "content-processor" || step_fail "content-processor"
 fi
 echo ""
 
@@ -338,11 +338,11 @@ echo ""
 log "Step 5.5: Magazine Generator"
 if $DRY_RUN; then
     DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:-}:/opt/homebrew/lib" \
-        $PYTHON "$PROJECT_ROOT/scripts/magazine_generator.py" --date "$DATE" --dry-run --no-openai 2>&1 \
+        $PYTHON "$PROJECT_ROOT/src/pipeline/magazine_generator.py" --date "$DATE" --dry-run --no-openai 2>&1 \
         && step_ok "magazine-generator (dry run)" || step_fail "magazine-generator"
 else
     DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:-}:/opt/homebrew/lib" \
-        $PYTHON "$PROJECT_ROOT/scripts/magazine_generator.py" --date "$DATE" 2>&1 \
+        $PYTHON "$PROJECT_ROOT/src/pipeline/magazine_generator.py" --date "$DATE" 2>&1 \
         && step_ok "magazine-generator" || step_fail "magazine-generator"
 fi
 echo ""
@@ -383,7 +383,7 @@ else
     log "  Waiting for artifact generation (polling every 30s, max 10 min)..."
 
     # Refresh auth before polling/download phase
-    $PYTHON "$PROJECT_ROOT/scripts/nlm_rotate_cookies.py" --verify 2>&1 || true
+    $PYTHON "$PROJECT_ROOT/src/nlm/nlm_rotate_cookies.py" --verify 2>&1 || true
 
     MANIFEST="$PROJECT_ROOT/data/content-processor-output.json"
     if [[ -f "$PROJECT_ROOT/data/notebooks.json" ]]; then
@@ -442,7 +442,7 @@ while waited < max_wait:
             auth_failures += 1
             if auth_failures <= 2:
                 print(f'  Auth expired — rotating cookies...')
-                subprocess.run([f'{project}/.venv/bin/python3', f'{project}/scripts/nlm_rotate_cookies.py', '--verify'],
+                subprocess.run([f'{project}/.venv/bin/python3', f'{project}/src/nlm/nlm_rotate_cookies.py', '--verify'],
                               capture_output=True, text=True, timeout=30)
             all_done = False
             break
@@ -462,7 +462,7 @@ for nb in recent:
     # Download podcast (uses CDP redirect-following workaround)
     podcast_raw = f'{project}/data/{slug}-podcast-raw.mp4'
     podcast = f'{project}/data/{slug}-podcast.mp3'
-    r = subprocess.run([f'{project}/.venv/bin/python3', f'{project}/scripts/nlm_download_audio.py',
+    r = subprocess.run([f'{project}/.venv/bin/python3', f'{project}/src/nlm/nlm_download_audio.py',
                        nb['id'], '--output', podcast_raw],
                       capture_output=True, text=True, timeout=600)
     if r.returncode == 0 and os.path.exists(podcast_raw) and os.path.getsize(podcast_raw) > 0:
@@ -484,7 +484,7 @@ for nb in recent:
         # Render PDF
         report_pdf = f'{project}/data/{slug}-report.pdf'
         os.environ['DYLD_FALLBACK_LIBRARY_PATH'] = os.environ.get('DYLD_FALLBACK_LIBRARY_PATH', '') + ':/opt/homebrew/lib'
-        r2 = subprocess.run([f'{project}/.venv/bin/python3', f'{project}/lib/pdf_renderer.py',
+        r2 = subprocess.run([f'{project}/.venv/bin/python3', f'{project}/src/lib/pdf_renderer.py',
                            '--input', report_md, '--output', report_pdf],
                           capture_output=True, text=True, timeout=60)
         if r2.returncode == 0:
@@ -501,7 +501,7 @@ for nb in recent:
                 break
 
     # Index in ChromaDB
-    subprocess.run([f'{project}/.venv/bin/python3', f'{project}/scripts/index_notebook.py',
+    subprocess.run([f'{project}/.venv/bin/python3', f'{project}/src/pipeline/index_notebook.py',
                    '--notebook-id', nb['id']],
                   capture_output=True, text=True, timeout=60)
 
@@ -540,7 +540,7 @@ if all_reports:
 
     # Render PDF (with TOC)
     subprocess.run(
-        [f'{project}/.venv/bin/python3', f'{project}/lib/pdf_renderer.py',
+        [f'{project}/.venv/bin/python3', f'{project}/src/lib/pdf_renderer.py',
          '--input', md_path, '--output', pdf_path],
         capture_output=True, text=True, timeout=120, env=env)
 

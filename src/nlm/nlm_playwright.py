@@ -45,8 +45,8 @@ from pathlib import Path
 
 # Ensure project root is on sys.path
 SCRIPT_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = SCRIPT_DIR.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+PROJECT_ROOT = SCRIPT_DIR.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from lib.file_utils import load_json, save_json, now_iso
 from lib.log_utils import StepTimer, log_event

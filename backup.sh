@@ -69,27 +69,27 @@ fi
 # ── 5. Skills + scripts + templates ──
 echo "[5/6] Backing up skills, scripts, and templates..."
 mkdir -p "$BACKUP_DIR/skills"
-cp $SCRIPT_DIR/router.py "$BACKUP_DIR/skills/"
+cp $SCRIPT_DIR/src/router.py "$BACKUP_DIR/skills/"
 echo "  + router.py"
-if [ -f "$SCRIPT_DIR/newsletter_parser.py" ]; then
-  cp $SCRIPT_DIR/newsletter_parser.py "$BACKUP_DIR/skills/"
+if [ -f "$SCRIPT_DIR/src/newsletter_parser.py" ]; then
+  cp $SCRIPT_DIR/src/newsletter_parser.py "$BACKUP_DIR/skills/"
   echo "  + newsletter_parser.py"
 fi
-if [ -f "$SCRIPT_DIR/daily_feed_generator.py" ]; then
-  cp $SCRIPT_DIR/daily_feed_generator.py "$BACKUP_DIR/skills/"
+if [ -f "$SCRIPT_DIR/src/daily_feed_generator.py" ]; then
+  cp $SCRIPT_DIR/src/daily_feed_generator.py "$BACKUP_DIR/skills/"
   echo "  + daily_feed_generator.py"
 fi
-if [ -f "$SCRIPT_DIR/data_triage.py" ]; then
-  cp $SCRIPT_DIR/data_triage.py "$BACKUP_DIR/skills/"
+if [ -f "$SCRIPT_DIR/src/data_triage.py" ]; then
+  cp $SCRIPT_DIR/src/data_triage.py "$BACKUP_DIR/skills/"
   echo "  + data_triage.py"
 fi
-if [ -f "$SCRIPT_DIR/blog_monitor.py" ]; then
-  cp "$SCRIPT_DIR/blog_monitor.py" "$BACKUP_DIR/skills/"
+if [ -f "$SCRIPT_DIR/src/blog_monitor.py" ]; then
+  cp "$SCRIPT_DIR/src/blog_monitor.py" "$BACKUP_DIR/skills/"
   echo "  + blog_monitor.py"
 fi
 if [ -d "$SCRIPT_DIR/lib" ]; then
   mkdir -p "$BACKUP_DIR/lib"
-  cp "$SCRIPT_DIR/lib/"*.py "$BACKUP_DIR/lib/" 2>/dev/null
+  cp "$SCRIPT_DIR/src/lib/"*.py "$BACKUP_DIR/lib/" 2>/dev/null
   echo "  + lib/ (utility modules)"
 fi
 if [ -d "$SCRIPT_DIR/tests" ]; then
@@ -104,7 +104,7 @@ if [ -f "$SCRIPT_DIR/pyproject.toml" ]; then
 fi
 if [ -d "$SCRIPT_DIR/scripts" ]; then
   mkdir -p "$BACKUP_DIR/scripts"
-  cp $SCRIPT_DIR/scripts/*.py "$BACKUP_DIR/scripts/" 2>/dev/null
+  cp $SCRIPT_DIR/src/pipeline/*.py" "$SCRIPT_DIR/src/nlm/*.py" "$SCRIPT_DIR/src/rag/*.py "$BACKUP_DIR/scripts/" 2>/dev/null
   echo "  + scripts/ (pipeline helper scripts)"
 fi
 if [ -d "$SCRIPT_DIR/templates" ]; then

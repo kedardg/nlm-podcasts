@@ -22,7 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 VENV_PYTHON = PROJECT_ROOT / ".venv" / "bin" / "python3"
 QUERY_SCRIPT = PROJECT_ROOT / "rag" / "query.py"
 AUTH_SCRIPT = PROJECT_ROOT / "scripts" / "nlm_ensure_auth.sh"

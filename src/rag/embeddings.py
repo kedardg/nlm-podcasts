@@ -39,8 +39,8 @@ class _NullCtx:
     def __exit__(self, *_): pass
 
 # Paths
-PROJECT_ROOT = Path(__file__).parent.parent
-CHROMA_DB_PATH = Path(__file__).parent / "chroma_db"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+CHROMA_DB_PATH = PROJECT_ROOT / "rag" / "chroma_db"
 SOURCES_FILE = PROJECT_ROOT / "data" / "sources.json"
 NOTEBOOKS_FILE = PROJECT_ROOT / "data" / "notebooks.json"
 CATEGORIES_FILE = PROJECT_ROOT / "data" / "categories.json"

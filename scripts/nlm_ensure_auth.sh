@@ -20,8 +20,8 @@ source "$SCRIPT_DIR/../config/env.sh" 2>/dev/null || {
 
 NLM="$HOME/.local/bin/nlm"
 PYTHON="$PROJECT_ROOT/.venv/bin/python3"
-ROTATE_SCRIPT="$PROJECT_ROOT/scripts/nlm_rotate_cookies.py"
-PLAYWRIGHT_SCRIPT="$PROJECT_ROOT/scripts/nlm_playwright.py"
+ROTATE_SCRIPT="$PROJECT_ROOT/src/nlm/nlm_rotate_cookies.py"
+PLAYWRIGHT_SCRIPT="$PROJECT_ROOT/src/nlm/nlm_playwright.py"
 
 # Check if nlm exists
 if [ ! -f "$NLM" ]; then

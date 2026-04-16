@@ -71,7 +71,7 @@ deliver_audio() {
 
 echo "Looking up latest $CATEGORY $ARTIFACT..." >&2
 
-FETCH_OUTPUT=$($VENV_PYTHON "$PROJECT/scripts/fetch_latest.py" --category "$CATEGORY" --artifact "$ARTIFACT" 2>/tmp/fetch_stderr)
+FETCH_OUTPUT=$($VENV_PYTHON "$PROJECT/src/pipeline/fetch_latest.py" --category "$CATEGORY" --artifact "$ARTIFACT" 2>/tmp/fetch_stderr)
 FETCH_EXIT=$?
 
 if [ $FETCH_EXIT -ne 0 ]; then
@@ -157,11 +157,11 @@ if [ "$ARTIFACT" = "report" ] || [ "$ARTIFACT" = "both" ]; then
     if $NLM download report "$NB_REF" --output "$TMPDIR/report.md" 2>/dev/null; then
       # Enhance report
       echo "Enhancing report..." >&2
-      $VENV_PYTHON "$PROJECT/scripts/enhance_report.py" --input "$TMPDIR/report.md" >/dev/null 2>&1 || true
+      $VENV_PYTHON "$PROJECT/src/pipeline/enhance_report.py" --input "$TMPDIR/report.md" >/dev/null 2>&1 || true
 
       # Convert to PDF
       echo "Converting to PDF..." >&2
-      DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $VENV_PYTHON "$PROJECT/lib/pdf_renderer.py" \
+      DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $VENV_PYTHON "$PROJECT/src/lib/pdf_renderer.py" \
         --input "$TMPDIR/report.md" --output "$TMPDIR/report.pdf" >/dev/null 2>&1
 
       # Deliver PDF (fall back to .md)
@@ -189,7 +189,7 @@ if [ "$ARTIFACT" = "podcast" ] || [ "$ARTIFACT" = "both" ]; then
     TMPDIR_POD=$(mktemp -d)
     FFMPEG="/opt/homebrew/bin/ffmpeg"
     [[ -x "$FFMPEG" ]] || FFMPEG="ffmpeg"
-    if $PYTHON "${PROJECT_ROOT:-.}/scripts/nlm_download_audio.py" "$NB_REF" --output "$TMPDIR_POD/podcast-raw.mp4" 2>/dev/null && [ -s "$TMPDIR_POD/podcast-raw.mp4" ]; then
+    if $PYTHON "${PROJECT_ROOT:-.}/src/nlm/nlm_download_audio.py" "$NB_REF" --output "$TMPDIR_POD/podcast-raw.mp4" 2>/dev/null && [ -s "$TMPDIR_POD/podcast-raw.mp4" ]; then
       $FFMPEG -y -i "$TMPDIR_POD/podcast-raw.mp4" -ac 1 -b:a 48k -ar 22050 "$TMPDIR_POD/podcast.mp3" 2>/dev/null
       if [ -s "$TMPDIR_POD/podcast.mp3" ]; then
         deliver_audio "$TMPDIR_POD/podcast.mp3" "Podcast — $NB_REF" && DELIVERED="$DELIVERED podcast"

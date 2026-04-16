@@ -49,7 +49,7 @@ except ImportError:
     def normalize_url_deep(url):
         return url
 
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 DAILY_FEED_DIR = DATA_DIR / "daily-feed"
 SOURCES_FILE = DATA_DIR / "sources.json"

@@ -33,7 +33,7 @@ except ImportError:
     def normalize_url_deep(url):
         return url  # fallback: no normalization
 
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 SOURCES_FILE = DATA_DIR / "sources.json"
 ACCOUNTS_FILE = DATA_DIR / "accounts.json"

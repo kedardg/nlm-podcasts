@@ -44,7 +44,7 @@ except ImportError:
         except Exception:
             return url
 
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 SOURCES_FILE = DATA_DIR / "sources.json"
 NEWS_QUEUE_FILE = DATA_DIR / "news-queue.json"

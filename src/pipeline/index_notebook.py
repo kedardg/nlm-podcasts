@@ -20,8 +20,8 @@ import sys
 from pathlib import Path
 
 # Add project root to path so we can import rag modules
-PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from rag.embeddings import index_notebook_sources, index_notebook_summary  # noqa: E402
 

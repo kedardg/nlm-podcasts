@@ -149,12 +149,12 @@ After successful creation, add an entry to `data/notebooks.json`:
 After recording the notebook in the registry, index its source metadata into ChromaDB for notebook-routed RAG queries:
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/index_notebook.py --notebook-id <notebook-id>
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/pipeline/index_notebook.py --notebook-id <notebook-id>
 ```
 
 If a companion note was saved to a file, include it:
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/index_notebook.py --notebook-id <notebook-id> --companion-note <path-to-companion-note>
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/pipeline/index_notebook.py --notebook-id <notebook-id> --companion-note <path-to-companion-note>
 ```
 
 This enables `chat` commands to find this notebook via semantic search. If indexing fails, log the error but continue — the notebook is still usable, just not discoverable via RAG.

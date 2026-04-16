@@ -31,7 +31,7 @@ This auto-detects `PROJECT_ROOT` and loads all variables from `.env` (including 
 Pull any new newsletter emails that arrived since the last fetch:
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/newsletter_parser.py
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/newsletter_parser.py
 ```
 
 This extracts links from new emails and routes them to `sources.json` (research/github/youtube) and `news-queue.json` (news/blog). Without this step, the daily feed only sees items already saved from previous runs.
@@ -39,7 +39,7 @@ This extracts links from new emails and routes them to `sources.json` (research/
 ### Step 1: Run the daily feed generator
 
 ```bash
-DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/daily_feed_generator.py --pdf-only
+DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/daily_feed_generator.py --pdf-only
 ```
 
 This script:
@@ -126,11 +126,11 @@ Repeat every 30 seconds until both report and podcast generation complete. Maxim
 
 **Enhance and convert report to PDF** (replaces the deterministic PDF from Step 1):
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/enhance_report.py \
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/pipeline/enhance_report.py \
   --input $PROJECT_ROOT/data/daily-feed/YYYY-MM-DD-report.md
 ```
 ```bash
-DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/lib/pdf_renderer.py \
+DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/lib/pdf_renderer.py \
   --input $PROJECT_ROOT/data/daily-feed/YYYY-MM-DD-report.md \
   --output $PROJECT_ROOT/data/daily-feed/YYYY-MM-DD-report.pdf
 ```
@@ -139,7 +139,7 @@ If NLM report download fails, fall back to the deterministic PDF from Step 1.
 
 **Download and compress podcast:**
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/nlm_download_audio.py daily-YYYY-MM-DD --output $PROJECT_ROOT/data/daily-feed/YYYY-MM-DD-podcast-raw.mp4
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/nlm/nlm_download_audio.py daily-YYYY-MM-DD --output $PROJECT_ROOT/data/daily-feed/YYYY-MM-DD-podcast-raw.mp4
 ```
 Note: `nlm download audio` is broken (httpx TooManyRedirects). Use `nlm_download_audio.py` which extracts Chrome CDP cookies and follows the redirect chain. Requires Chrome with `--remote-debugging-port`.
 
@@ -153,7 +153,7 @@ Compress for Telegram delivery (48kbps mono — fits under 16MB limit, clear for
 Index the NLM report's TL;DR for notebook routing:
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/index_notebook.py \
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/pipeline/index_notebook.py \
   --notebook-id {notebook-id} \
   --report-file $PROJECT_ROOT/data/daily-feed/YYYY-MM-DD-report.md
 ```

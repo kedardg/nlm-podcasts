@@ -40,7 +40,7 @@ except ImportError:
     def normalize_url_deep(url):
         return url
 
-PROJECT_ROOT = Path(__file__).parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 FEEDS_FILE = DATA_DIR / "feeds.json"
 SOURCES_FILE = DATA_DIR / "sources.json"
@@ -48,7 +48,7 @@ NEWS_QUEUE_FILE = DATA_DIR / "news-queue.json"
 CATEGORIES_FILE = DATA_DIR / "categories.json"
 
 # Shared utilities
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from lib.file_utils import load_json, load_news_queue, save_json, now_iso
 from newsletter_parser import (
     next_source_id,

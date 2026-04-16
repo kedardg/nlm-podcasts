@@ -29,8 +29,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from lib.file_utils import save_json  # noqa: E402
 
@@ -200,12 +200,7 @@ def extract_cookies_via_cdp() -> dict[str, str] | None:
     debugger_url = None
     nlm_ws_url = None
 
-    # Try localhost first, then host.docker.internal (for Docker containers
-    # reaching the host's Chrome). The ws:// URL from /json uses the same host.
     cdp_hosts = ["127.0.0.1"]
-    if os.environ.get("PROJECT_ROOT") == "/app":
-        # Running inside Docker — also try the host machine
-        cdp_hosts.append("host.docker.internal")
 
     for host in cdp_hosts:
         for port in CDP_PORTS:
@@ -224,9 +219,6 @@ def extract_cookies_via_cdp() -> dict[str, str] | None:
                         if "google.com" in page.get("url", ""):
                             nlm_ws_url = page.get("webSocketDebuggerUrl")
                             break
-                # Fix ws:// URL to use the reachable host (not 127.0.0.1 from inside Docker)
-                if nlm_ws_url and host != "127.0.0.1":
-                    nlm_ws_url = nlm_ws_url.replace("127.0.0.1", host).replace("localhost", host)
                 if nlm_ws_url:
                     break
             except Exception:
