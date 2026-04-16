@@ -92,13 +92,24 @@ if [ "$CATEGORY" = "daily" ]; then
 
   DELIVERED=""
 
+  # Gate each send on the requested artifact so e.g. `/generate daily` (report
+  # only) does not also fire the podcast whenever one happens to exist.
+  WANT_REPORT=false
+  WANT_PODCAST=false
+  case "$ARTIFACT" in
+    report) WANT_REPORT=true ;;
+    podcast) WANT_PODCAST=true ;;
+    both) WANT_REPORT=true; WANT_PODCAST=true ;;
+    *) WANT_REPORT=true; WANT_PODCAST=true ;;
+  esac
+
   # Deliver report directly (no workspace copy needed)
-  if [ -n "$REPORT_PATH" ] && [ -f "$REPORT_PATH" ]; then
+  if $WANT_REPORT && [ -n "$REPORT_PATH" ] && [ -f "$REPORT_PATH" ]; then
     deliver_file "$REPORT_PATH" "Daily Tech Feed — $DATE" && DELIVERED="report"
   fi
 
   # Deliver podcast directly (sendAudio for inline player)
-  if [ "$HAS_PODCAST" = "true" ] && [ -n "$PODCAST_PATH" ] && [ -f "$PODCAST_PATH" ]; then
+  if $WANT_PODCAST && [ "$HAS_PODCAST" = "true" ] && [ -n "$PODCAST_PATH" ] && [ -f "$PODCAST_PATH" ]; then
     deliver_audio "$PODCAST_PATH" "Daily Podcast — $DATE" && DELIVERED="$DELIVERED podcast"
   fi
 

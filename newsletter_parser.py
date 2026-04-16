@@ -32,7 +32,7 @@ import requests
 from bs4 import BeautifulSoup
 from ural import normalize_url
 
-from lib.file_utils import load_json, save_json, now_iso
+from lib.file_utils import load_json, load_news_queue, save_json, now_iso
 
 try:
     from lib.url_utils import normalize_url_deep
@@ -663,7 +663,7 @@ def route_links(links, newsletter_id, newsletter_name):
     Returns a summary dict with counts.
     """
     sources = load_json(SOURCES_FILE)
-    news_queue = load_json(NEWS_QUEUE_FILE)
+    news_queue = load_news_queue(NEWS_QUEUE_FILE)
     categories = load_json(DATA_DIR / "categories.json")
 
     stats = {"research": 0, "github": 0, "news": 0, "blog": 0, "youtube": 0, "social": 0, "skipped": 0, "duplicate": 0}

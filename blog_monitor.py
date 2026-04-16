@@ -49,7 +49,7 @@ CATEGORIES_FILE = DATA_DIR / "categories.json"
 
 # Shared utilities
 sys.path.insert(0, str(PROJECT_ROOT))
-from lib.file_utils import load_json, save_json, now_iso
+from lib.file_utils import load_json, load_news_queue, save_json, now_iso
 from newsletter_parser import (
     next_source_id,
     next_news_id,
@@ -399,7 +399,7 @@ def process_feeds(feed_id=None, dry_run=False):
     """Main entry point: load feeds, fetch items, dedup, route."""
     feeds, config, feeds_data = load_feeds(feed_id)
     sources = load_json(SOURCES_FILE)
-    news_queue = load_json(NEWS_QUEUE_FILE)
+    news_queue = load_news_queue(NEWS_QUEUE_FILE)
     categories = load_json(CATEGORIES_FILE)
 
     if not feeds:
