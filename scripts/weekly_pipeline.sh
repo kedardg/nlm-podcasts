@@ -206,9 +206,9 @@ src_map = {s['id']: s for s in sources_data.get('sources', [])}
 created = []
 
 for group_name, info in manifest.get('groups', {}).items():
-    # Idempotency: skip sources already in processing or completed status
+    # Include 'processing' too — content_processor marks sources as 'processing' after grouping
     queued_ids = [sid for sid in info.get('source_ids', [])
-                  if src_map.get(sid, {}).get('status') in ('queued', 'daily-digested')]
+                  if src_map.get(sid, {}).get('status') in ('queued', 'daily-digested', 'processing')]
     if not queued_ids:
         print(f'\\n--- {group_name}: no queued sources, skipping ---')
         continue

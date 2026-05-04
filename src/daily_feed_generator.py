@@ -101,8 +101,9 @@ def collect_today_items(target_date):
     items = []
 
     # Include items from today and yesterday (2-day window)
+    # Also include DATE+1 to handle items fetched after UTC midnight during late-night runs
     dt = datetime.strptime(target_date, "%Y-%m-%d")
-    valid_dates = [(dt - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(2)]
+    valid_dates = [(dt + timedelta(days=1)).strftime("%Y-%m-%d")] + [(dt - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(2)]
 
     # 1. Collect from sources.json (research, github, youtube)
     sources = load_json(SOURCES_FILE)

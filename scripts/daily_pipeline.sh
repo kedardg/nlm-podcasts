@@ -200,7 +200,8 @@ import json
 from datetime import datetime, timedelta
 sources = json.load(open('$PROJECT_ROOT/data/sources.json'))
 dt = datetime.strptime('$DATE', '%Y-%m-%d')
-valid = [(dt - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(2)]
+# Include DATE+1 to handle items fetched after UTC midnight during late-night runs
+valid = [(dt + timedelta(days=1)).strftime('%Y-%m-%d')] + [(dt - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(2)]
 urls = []
 for s in sources.get('sources', []):
     added = s.get('added_at', '')
@@ -352,7 +353,8 @@ import json, sys
 from datetime import datetime, timedelta
 sources = json.load(open('$PROJECT_ROOT/data/sources.json'))
 dt = datetime.strptime('$DATE', '%Y-%m-%d')
-valid = [(dt - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(2)]
+# Include DATE+1 to handle items fetched after UTC midnight during late-night runs
+valid = [(dt + timedelta(days=1)).strftime('%Y-%m-%d')] + [(dt - timedelta(days=i)).strftime('%Y-%m-%d') for i in range(2)]
 urls = []
 for s in sources.get('sources', []):
     added = s.get('added_at', '')
