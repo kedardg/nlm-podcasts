@@ -650,10 +650,12 @@ Pre-processing step in the weekly pipeline that handles deduplication, volume an
 | File | Used by | Purpose |
 |------|---------|---------|
 | `config/google-credentials.json` | `nlm_playwright.py` | Google account credentials for auto-login when NLM session expires. Fields: `email`, `password`, `profile_dir`. Gitignored. Auto-login attempts headless form fill; falls back to `--login` prompt on 2FA or failure. |
-| `config/prompts/daily-report-prompt-v3.txt` | `nlm_create_report.sh` | Daily report: standard markdown (## sections, ### articles, **Source:** URLs, **TL;DR:** summaries). Parsed by `daily_feed_generator.py::parse_nlm_report()`. |
-| `config/prompts/daily-podcast-focus.txt` | `nlm audio create --focus` | Daily podcast: cross-source synthesis, technical briefing, architecture highlights. |
-| `config/prompts/weekly-podcast-focus.txt` | `nlm audio create --focus` | Weekly podcast: deep architecture analysis, critical peer review, multi-paper synthesis. |
-| `templates/report-prompt.txt` | `nlm_create_report.sh` (default) | Weekly report: TL;DR, executive summary, architecture/methodology analysis, actionable insights. |
+| `config/prompts/daily-report-prompt-v3.txt` | `nlm_create_report.sh` | Daily report: standard markdown (## sections, ### articles, **Source:** URLs, **TL;DR:** summaries). Parsed by `daily_feed_generator.py::parse_nlm_report()`. Written in the **JournalClub arc** style (hook → stakes → prior-art-flaw → named mechanism → result/takeaway; analogy-first but jargon-exact). |
+| `config/prompts/daily-podcast-focus.txt` | `nlm audio create --focus` | Daily podcast: two-host explainer (Explainer + Curious Skeptic) following the **JournalClub arc** per theme; accessible-but-precise cross-source synthesis. |
+| `config/prompts/weekly-podcast-focus.txt` | `nlm audio create --focus` | Weekly podcast: deep two-host explainer (Explainer + Critical Peer Reviewer) following the **JournalClub arc**; architecture walkthrough, multi-paper synthesis. |
+| `config/prompts/magazine-structure-prompt.txt` | `magazine_generator.py` | GPT-4o system prompt for editorial brief, section intros/previews, and per-item briefs. Compressed **JournalClub arc** (hook → mechanism → takeaway). Outputs JSON contract (`editorial_brief`, `sections[].introduction/preview/briefs[]`). |
+| `templates/report-prompt.txt` | `nlm_create_report.sh` (default) | Weekly report: TL;DR, executive summary, architecture/methodology analysis, actionable insights — written in the **JournalClub arc** style. |
+| `config/prompts/*.technical.txt`, `templates/report-prompt.technical.txt` | (unused fallback) | Pre-JournalClub technical-dense versions of the five prompts above, kept for A/B comparison. Swap a `.technical.txt` over the live name to revert that prompt's style. |
 
 ## External Dependencies
 

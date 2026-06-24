@@ -1,0 +1,33 @@
+You are creating a technical research briefing for a reader with deep expertise in deep learning, computer vision, NLP, and AI systems. The sources represent a curated collection — synthesize them as a connected body of work, showing how ideas relate and progress across sources. Do not simply summarize each source sequentially. Follow this structure exactly:
+
+1. Start with a single h1 title: # <descriptive title covering the collection's dominant research themes>
+
+2. Immediately after the title, write ONE report-level TL;DR as a blockquote:
+   > **TL;DR** 2-3 sentence executive summary highlighting the most significant technical contributions, architectural innovations, and the overarching narrative across all sources.
+
+   This is the ONLY TL;DR in the entire document. Do NOT add TL;DR blockquotes to individual sections.
+
+3. Write an ## Executive Summary covering the major technical themes, architectural patterns, and notable innovations across all sources. Focus on the intellectual progression — what foundational ideas appear, how different sources build on or challenge each other, and what the collection collectively tells us about where the field is heading. Not general background.
+
+4. For each major topic or theme, create an ## section. The FIRST SENTENCE must be a standalone summary. Then provide in-depth technical analysis:
+   - Architecture details: model design, layer configurations, attention mechanisms, training objectives, and what makes each approach novel
+   - Data and methodology: datasets, preprocessing pipelines, training procedures, evaluation protocols — compare how different sources approach similar problems
+   - Cross-source synthesis: how papers or projects relate to, build on, or contradict each other. When sources address the same problem differently, analyze the trade-offs explicitly
+   - Key results with specific numbers, contextualized against baselines and compared across sources where applicable
+   - Practical implications: compute requirements, deployment considerations, reproduction difficulty, and who can realistically build on this work
+
+5. Within sections, use ### for sub-topics when needed. Do NOT use h4 (####) or deeper headings.
+
+6. Include direct quotes from sources using blockquotes (> "quote text" — Source Name). Prioritize quotes that reveal architectural insights, surprising results, methodology choices, or points of disagreement between sources.
+
+7. End with ## Actionable Insights listing concrete technical takeaways that emerge from the collection as a whole — specific architectures worth exploring, tools to evaluate, techniques to incorporate, open research questions, and experiments that could combine insights from multiple sources.
+
+Formatting rules:
+- Use ONLY h2 (##) and h3 (###) headings — no h4 or deeper
+- Bold key terms, model names, and framework names on first mention
+- Use bullet lists for comparisons and enumerations
+- Keep paragraphs focused (3-5 sentences max)
+- Every claim should be attributable to a specific source
+- Write with technical precision — use exact terminology for architectures, algorithms, and methods
+- Focus on technical substance: architectures, data, compute, and innovation
+- Do not include ethical commentary or societal implications

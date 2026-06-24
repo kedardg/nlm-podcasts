@@ -1,8 +1,18 @@
-Generate a comprehensive daily briefing in clean Markdown. This is a FULL-LENGTH MAGAZINE — write in-depth, detailed coverage for every source. The reader should understand every key development WITHOUT needing to click through to the originals.
+Generate a comprehensive daily briefing in clean Markdown, written in the style of a hand-crafted "JournalClub" explainer. This is a FULL-LENGTH MAGAZINE — every item should read like a miniature episode that walks the reader from an everyday entry point all the way to why the development matters, so they understand it fully WITHOUT clicking through to the original.
 
-CRITICAL FORMATTING RULES:
+THE HOUSE STYLE — "THE JOURNALCLUB ARC":
+Every piece of analysis (both the section synthesis and each individual article) must follow the same narrative arc that makes a complex paper click:
+1. HOOK — open on a concrete, everyday entry point: an analogy, a scene, or a plain-language framing of the problem. NEVER open with "This paper proposes..." or "The authors introduce...". Earn the reader's attention first.
+2. STAKES — make the real-world stakes vivid: who cares about this, what breaks without it, why it matters right now.
+3. PRIOR ART + ITS FLAW — explain how this is done today (the incumbent approach) and the specific failure mode that motivates the work. Teach the status quo first, then puncture it.
+4. THE MECHANISM — introduce the contribution as a conceptual shift, then unpack HOW it works using NAMED components (architectures, methods, metrics). Keep it technically exact.
+5. RESULT + TAKEAWAY — give the headline results in plain language with exact numbers, then close on what it shifts, what to watch, or who should act on it.
+
+TONE: Analogy-first but jargon-exact. Ground every technical idea in something concrete BEFORE the formula or term appears, but never sacrifice precision — this is a technical audience, so keep exact architectures, datasets, and numbers. Describe equations in words (e.g. "sentiment times alignment, divided by the square of the ESG score") rather than rendering raw LaTeX. Conversational yet authoritative — a smart colleague walking you through it, not a lecture and not a dry abstract.
+
+CRITICAL FORMATTING RULES (these keep the magazine parser working — do not deviate):
 - Use ONLY standard Markdown — no XML tags, no HTML tags, no custom markup
-- Use ## for section headings (exactly: AI Research, Tech Industry, Development, News)
+- Use ## for section headings (EXACTLY these four: AI Research, Tech Industry, Development, News)
 - Use ### for EVERY article title — NEVER use **bold** as a substitute for ### headings
 - Use **bold** for key terms, model names, and numbers within body text
 - Every source URL from the notebook MUST appear in exactly one article as a **Source:** line
@@ -12,20 +22,20 @@ Output this structure:
 
 # Your Descriptive Title Here
 
-A 1-2 sentence summary of the most significant theme across all sources.
+A 1-2 sentence cover paragraph that frames the day's through-line as a single story — the dominant thread connecting today's sources, told as a hook, not a table of contents.
 
 ## AI Research
 
-Write a 4-paragraph synthesis of this category (500 words max). Structure:
-- Paragraph 1: The dominant theme or most significant development and why it matters right now.
-- Paragraph 2: How the individual items in this section connect to each other — shared techniques, converging trends, or contrasting approaches.
-- Paragraph 3: Broader context — how today's developments fit into the trajectory of the field over recent weeks/months.
-- Paragraph 4: What to watch — open questions, expected follow-ups, or implications practitioners should prepare for.
-This should read as editorial analysis, not a list of items.
+Write a 4-paragraph synthesis of this category (500 words max), following the JournalClub arc at the THEME level:
+- Paragraph 1 (HOOK + STAKES): Open on the dominant theme through a concrete framing or analogy, and make clear why it matters right now.
+- Paragraph 2 (PRIOR ART + ITS FLAW): The limitation the field is wrestling with, and how today's individual items connect to it — shared techniques, converging trends, or contrasting approaches.
+- Paragraph 3 (THE MECHANISM): The approaches themselves — named methods/architectures — and how they differ from each other and from what came before. This is where the technical substance lives.
+- Paragraph 4 (RESULT + TAKEAWAY): What this collectively shows, the open questions, and what practitioners should watch or prepare for.
+This should read as editorial narrative, not a list of items.
 
 ### Descriptive Article Title
 **Source:** exact_source_url_here
-**Analysis:** Write a single dense paragraph (500-800 characters for notable items, 800+ for major items) that weaves together WHAT happened, HOW it works (technical details, architectures, numbers), KEY RESULTS (benchmarks, metrics, exact figures), WHY IT MATTERS (implications, landscape shift), and CONNECTIONS to other items in the briefing or broader trends. Use **bold** for key terms, model names, and numbers. The reader should fully understand this development without clicking through. Write with editorial voice — not a dry summary but an informed analysis that contextualizes the significance.
+**Analysis:** Write a single dense paragraph (500-800 characters for notable items, 800+ for major items) that runs the full JournalClub arc in compressed form: open with a HOOK or plain-language framing of the problem (not "this paper proposes"), make the STAKES clear, name the PRIOR-ART limitation it addresses, then explain the MECHANISM with named components and exact technical detail (architectures, datasets, numbers), and close on the KEY RESULT (benchmarks, metrics, exact figures) and WHY IT MATTERS — the landscape shift, what to watch, or connections to other items in today's briefing. Use **bold** for key terms, model names, and numbers. The reader should fully understand this development, and care about it, without clicking through.
 
 ### Next Article Title
 **Source:** url
@@ -33,19 +43,19 @@ This should read as editorial analysis, not a list of items.
 
 ## Tech Industry
 
-4-paragraph synthesis (same structure as AI Research above, 500 words max)...
+4-paragraph synthesis (same JournalClub-arc structure as AI Research above, 500 words max)...
 
 ### Article...
 
 ## Development
 
-4-paragraph synthesis (same structure as AI Research above, 500 words max)...
+4-paragraph synthesis (same JournalClub-arc structure as AI Research above, 500 words max)...
 
 ### Article...
 
 ## News
 
-4-paragraph synthesis (same structure as AI Research above, 500 words max)...
+4-paragraph synthesis (same JournalClub-arc structure as AI Research above, 500 words max)...
 
 ### Article...
 
@@ -67,9 +77,9 @@ List ALL source URLs from the notebook here, including sources that were NOT cov
 This section ensures every source is discoverable even if it didn't warrant a full article above. Sources that DO have articles above should also appear here for easy reference.
 
 COVERAGE DEPTH:
-- Every **Analysis:** paragraph MUST be at least 500 characters (roughly 5-8 sentences). Aim for 500-800 characters per article.
-- Major items (breakthroughs, large funding, flagship launches, influential papers): 800+ characters with full technical detail, methodology, results, and implications.
-- Notable items (significant developments): 500-800 characters covering key details, numbers, and why it matters.
+- Every **Analysis:** paragraph MUST be at least 500 characters (roughly 5-8 sentences) and MUST hit at least the hook, the mechanism, and the result+takeaway beats. Aim for 500-800 characters per article.
+- Major items (breakthroughs, large funding, flagship launches, influential papers): 800+ characters with the full arc — hook, stakes, prior-art flaw, named mechanism with technical detail, results, and implications.
+- Notable items (significant developments): 500-800 characters covering the hook, the mechanism, key numbers, and why it matters.
 - If you cannot write at least 500 characters of SUBSTANTIVE content about a source (e.g., you only have a title and URL with no actual content), DO NOT create an article for it — skip it entirely. Include it only in the Source Links section at the end.
 - Only create article entries for sources where you have enough information to write a meaningful, specific analysis.
 - Items skipped from articles MUST still appear in the ## Source Links section — no source should be lost.
@@ -81,13 +91,12 @@ SECTION ASSIGNMENT RULES:
 - News: AI policy, regulation, workforce trends, security incidents, ethics, general interest
 
 WRITING GUIDELINES:
-- Technical audience with ML/AI expertise — no need to explain basic concepts
-- Lead with the most important information, then expand with detail
-- For papers: architecture, method, dataset, key results with numbers, comparison to baselines
-- For tools: problem solved, design approach, technical architecture, usage considerations
-- For funding/business: amount, investors, valuation context, what it signals about market direction
-- For policy/security: what happened, technical details, affected systems, remediation steps
-- Use specific numbers everywhere: "$3B", "397B parameters", "8x reduction", "1/5th cost"
-- Section synthesis after each ## MUST be exactly 4 paragraphs (500 words max): dominant theme, connections between items, broader context, what to watch
-- Key Takeaways should be cross-section insights, not per-item summaries
-- Every article Source must be the exact URL from the source material — do not modify or shorten URLs
+- Technical audience with ML/AI expertise — keep exact terminology, but always ground a concept in an intuition or analogy BEFORE leaning on the jargon. Accessible AND precise, never one at the expense of the other.
+- For papers: lead with the problem and the everyday stakes, then the prior approach and its failure mode, then the architecture/method/dataset and key results with numbers, then comparison to baselines and what it shifts.
+- For tools: the problem it solves and who hits it, the design approach and technical architecture, usage considerations, and how it bridges research to production.
+- For funding/business: the everyday framing of what this enables, then amount, investors, valuation context, and what it signals about market direction.
+- For policy/security: the human stakes, what happened, technical details, affected systems, and remediation steps.
+- Use specific numbers everywhere: "$3B", "397B parameters", "8x reduction", "1/5th cost".
+- Section synthesis after each ## MUST be exactly 4 paragraphs (500 words max) following the JournalClub arc at theme level: hook+stakes, prior-art+flaw, mechanism, result+what-to-watch.
+- Key Takeaways should be cross-section insights, not per-item summaries.
+- Every article Source must be the exact URL from the source material — do not modify or shorten URLs.
