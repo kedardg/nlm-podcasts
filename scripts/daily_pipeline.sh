@@ -66,6 +66,7 @@ REPORT_MD="$FEED_DIR/$DATE-report.md"
 REPORT_PDF="$FEED_DIR/$DATE-report.pdf"
 PODCAST_RAW="$FEED_DIR/$DATE-podcast-raw.mp4"
 PODCAST="$FEED_DIR/$DATE-podcast.mp3"
+SRC_MANIFEST="$FEED_DIR/$DATE-sources.txt"
 
 PIPELINE_START=$(date +%s)
 STEP_DURATIONS=""
@@ -347,6 +348,11 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
     ADDED=0
     FAILED=0
 
+    # Reset the deterministic manifest of URLs actually added to the notebook
+    # (SRC_MANIFEST is defined at top). Consumed by enhance_report.py to build the
+    # report's ## Source Links section from ground truth.
+    : > "$SRC_MANIFEST"
+
     # Collect top URLs from today's feed (max 15)
     URLS=$($PYTHON -c "
 import json, sys
@@ -375,6 +381,7 @@ for u in urls:
         $NLM source add "$NOTEBOOK_ID" --url "$url" --wait 2>&1 >/dev/null
         if [[ $? -eq 0 ]]; then
             ADDED=$((ADDED + 1))
+            echo "$url" >> "$SRC_MANIFEST"
         else
             FAILED=$((FAILED + 1))
         fi
@@ -476,9 +483,11 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
     if [[ -f "$REPORT_MD" ]] && [[ -s "$REPORT_MD" ]]; then
         step_ok "report-download"
 
-        # Enhance report
+        # Enhance report — deterministic ## Source Links from the add-time manifest
         if [[ -f "$PROJECT_ROOT/src/pipeline/enhance_report.py" ]]; then
-            $PYTHON "$PROJECT_ROOT/src/pipeline/enhance_report.py" --input "$REPORT_MD" 2>&1 || true
+            ENHANCE_ARGS=(--input "$REPORT_MD")
+            [[ -s "$SRC_MANIFEST" ]] && ENHANCE_ARGS+=(--manifest "$SRC_MANIFEST")
+            $PYTHON "$PROJECT_ROOT/src/pipeline/enhance_report.py" "${ENHANCE_ARGS[@]}" 2>&1 || true
         fi
 
         # Render report PDF

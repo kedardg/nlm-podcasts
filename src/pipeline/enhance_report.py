@@ -4,11 +4,15 @@ Deterministic post-processor for NotebookLM research reports.
 
 Three operations:
 1. Remove per-section TL;DRs — strips any > **TL;DR** blockquotes after the first one
-2. Append source links — reads data/sources.json (filtered by --status), appends ## Source Links
+2. Deterministic source links — ALWAYS strips the model-generated ## Source Links
+   (URLs there are unreliable: hallucinated or omitted) and rebuilds it from ground
+   truth. With --manifest (the URLs actually added to the notebook, written by the
+   pipeline at source-add time) the list is exact; otherwise it falls back to
+   data/sources.json filtered by --status.
 3. Validate headings — warns about h4+ or orphan h3s (h3 without a preceding h2)
 
 Usage:
-    python3 scripts/enhance_report.py --input report.md
+    python3 scripts/enhance_report.py --input report.md --manifest data/daily-feed/2026-06-24-sources.txt
     python3 scripts/enhance_report.py --input report.md --sources-file data/sources.json
     python3 scripts/enhance_report.py --input report.md --dry-run
 """
@@ -21,6 +25,14 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_SOURCES = PROJECT_ROOT / "data" / "sources.json"
+
+# Optional deep URL normalization for robust manifest↔sources.json title matching.
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+try:
+    from lib.url_utils import normalize_url_deep
+except Exception:  # pragma: no cover - fallback if lib unavailable
+    def normalize_url_deep(url: str) -> str:
+        return (url or "").strip()
 
 
 def remove_extra_tldrs(text: str) -> tuple[str, int]:
@@ -99,6 +111,78 @@ def build_source_links(sources_file: Path, status_filter: str = "queued") -> str
     return "\n".join(lines)
 
 
+def _load_source_meta(sources_file: Path) -> dict:
+    """Build a {normalized_url: source_dict} lookup from sources.json."""
+    if not sources_file.exists():
+        return {}
+    try:
+        data = json.loads(sources_file.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+    lookup = {}
+    for src in data.get("sources", []):
+        url = src.get("url")
+        if url:
+            lookup[normalize_url_deep(url)] = src
+    return lookup
+
+
+def build_source_links_from_manifest(
+    manifest_path: Path, sources_file: Path,
+) -> str | None:
+    """Build a ## Source Links section from a manifest of URLs actually added.
+
+    The manifest is the authoritative, deterministic list of source URLs that
+    went into the notebook (one URL per line, written by the pipeline at
+    source-add time). Titles/category/origin are looked up from sources.json by
+    normalized-URL match; URLs with no match still appear (link text = URL).
+
+    Returns:
+        Markdown string for the source links section, or None if manifest empty.
+    """
+    if not manifest_path.exists():
+        return None
+
+    urls = [ln.strip() for ln in manifest_path.read_text().splitlines() if ln.strip()]
+    if not urls:
+        return None
+
+    meta = _load_source_meta(sources_file)
+
+    lines = ["---", "", "## Source Links", ""]
+    seen = set()
+    for url in urls:
+        norm = normalize_url_deep(url)
+        if norm in seen:
+            continue
+        seen.add(norm)
+        src = meta.get(norm, {})
+        title = src.get("title") or url
+        category = src.get("category", "")
+        origin = src.get("origin", "")
+        meta_parts = [p for p in (category, origin) if p]
+        suffix = f" *({', '.join(meta_parts)})*" if meta_parts else ""
+        lines.append(f"- [{title}]({url}){suffix}")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def strip_existing_source_links(text: str) -> str:
+    """Remove a trailing ## Source Links section (and its leading --- rule).
+
+    Source Links is always the final section, so we drop from its heading to EOF,
+    then trim any horizontal rule and trailing whitespace that preceded it.
+    """
+    m = re.search(r"^##\s+Source Links\b", text, re.MULTILINE)
+    if not m:
+        return text
+    head = text[: m.start()]
+    # Trim a preceding '---' separator and surrounding blank lines.
+    head = re.sub(r"\s*(?:^---\s*$)?\s*\Z", "", head, flags=re.MULTILINE)
+    return head.rstrip() + "\n"
+
+
 def validate_headings(text: str) -> list[str]:
     """Check for h4+ headings and orphan h3s (h3 without preceding h2).
 
@@ -128,6 +212,7 @@ def enhance_report(
     input_path: Path,
     sources_file: Path | None = None,
     status_filter: str = "queued",
+    manifest_path: Path | None = None,
     dry_run: bool = False,
 ) -> None:
     """Run all enhancement operations on a report markdown file."""
@@ -137,6 +222,7 @@ def enhance_report(
 
     text = input_path.read_text()
     original = text
+    sf = sources_file or DEFAULT_SOURCES
 
     # 1. Remove extra TL;DRs
     text, removed_count = remove_extra_tldrs(text)
@@ -145,18 +231,27 @@ def enhance_report(
     else:
         print("  No extra TL;DRs to remove")
 
-    # 2. Append source links (only if not already present)
-    if re.search(r"^## Source Links", text, re.MULTILINE):
-        print("  Source Links section already exists — skipping")
-    else:
-        sf = sources_file or DEFAULT_SOURCES
+    # 2. Source links — make them DETERMINISTIC. The model's own ## Source Links
+    #    (if any) is unreliable (hallucinated/omitted URLs), so always strip it
+    #    and rebuild from ground truth: the manifest of URLs actually added to the
+    #    notebook, falling back to sources.json when no manifest is supplied.
+    links_section = None
+    if manifest_path is not None:
+        links_section = build_source_links_from_manifest(manifest_path, sf)
+        if links_section is None:
+            print(f"  Manifest empty/missing ({manifest_path}) — falling back to sources.json")
+    if links_section is None:
         links_section = build_source_links(sf, status_filter)
-        if links_section:
-            text = text.rstrip() + "\n\n" + links_section
-            count = links_section.count("\n- [")
-            print(f"  Appended Source Links section ({count} links)")
-        else:
-            print("  No sources found to append")
+
+    if links_section:
+        stripped = strip_existing_source_links(text)
+        if stripped != text:
+            print("  Replaced model-generated Source Links with deterministic list")
+        text = stripped.rstrip() + "\n\n" + links_section
+        count = links_section.count("\n- [")
+        print(f"  Source Links section: {count} deterministic links")
+    else:
+        print("  No sources found to append")
 
     # 3. Validate headings
     warnings = validate_headings(text)
@@ -184,16 +279,22 @@ def main():
     parser.add_argument(
         "--status",
         default="queued",
-        help="Only include sources with this status (default: queued)",
+        help="Fallback filter when no --manifest: include sources with this status (default: queued)",
+    )
+    parser.add_argument(
+        "--manifest",
+        help="Path to a newline-delimited list of source URLs actually added to "
+             "the notebook. When given, Source Links is built deterministically from it.",
     )
     parser.add_argument("--dry-run", action="store_true", help="Preview changes without writing")
     args = parser.parse_args()
 
     input_path = Path(args.input)
     sources_file = Path(args.sources_file) if args.sources_file else None
+    manifest_path = Path(args.manifest) if args.manifest else None
 
     print(f"Enhancing: {input_path}")
-    enhance_report(input_path, sources_file, args.status, args.dry_run)
+    enhance_report(input_path, sources_file, args.status, manifest_path, args.dry_run)
     print("Done.")
 
 

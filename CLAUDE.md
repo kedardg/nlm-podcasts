@@ -161,7 +161,7 @@ openclaw-research/
 | `rag_chat.py` | `.venv/bin/python3 scripts/rag_chat.py "question"` | Full Chat/RAG pipeline: ChromaDB search, NLM auth, notebook queries, formatted output. |
 | `content_processor.py` | `.venv/bin/python3 scripts/content_processor.py [--dry-run]` | Categorizes sources, creates companion notes per category group. |
 | `fetch_latest.py` | `.venv/bin/python3 scripts/fetch_latest.py --category <cat> --artifact <type>` | Finds latest notebook/artifact from notebooks.json or daily-feed/. |
-| `enhance_report.py` | `.venv/bin/python3 scripts/enhance_report.py --input report.md [--dry-run]` | Post-processes NLM reports (cleanup, source links appendix). |
+| `enhance_report.py` | `.venv/bin/python3 src/pipeline/enhance_report.py --input report.md [--manifest data/daily-feed/DATE-sources.txt] [--dry-run]` | Post-processes NLM reports: removes extra TL;DRs, validates headings, and rebuilds `## Source Links` **deterministically** — strips the model's unreliable version and regenerates from the `--manifest` of URLs actually added to the notebook (falls back to `sources.json` by `--status`). |
 | `index_notebook.py` | `.venv/bin/python3 scripts/index_notebook.py --notebook-id <id> [--all\|--report-file <path>]` | Indexes notebook sources + report TL;DRs into ChromaDB. |
 | `retry.sh` | `bash scripts/retry.sh <max_retries> <command...>` | Generic retry with exponential backoff (5s, 15s, 45s). |
 | `archive_old_news.py` | `.venv/bin/python3 scripts/archive_old_news.py [--days 30] [--dry-run]` | Archives queued news items older than N days to `data/archive/news-YYYY-MM.json`. Runs as Step 0 in weekly pipeline. |
@@ -265,7 +265,7 @@ All persistent state lives in `data/`:
 | `nlm-operations-log.json` | Append-only provenance log for Playwright NLM runs. Tracks every URL, text source, and artifact per run with status, size, and timing. Created by `nlm_playwright.py`. |
 | `triage-results.json` | HF triage classification results. Each item has content_type (research/news/blog), confidence, method (domain_rule/title_heuristic/llm), reasoning. Created by `scripts/hf_triage.py`, consumed by `scripts/magazine_generator.py`. Incremental — cached results are reused across runs. |
 | `triage-plan.json` | Generated triage plan (notebook grouping, dedup report). Created by `data_triage.py --auto`, consumed by content-processor. After use, renamed to `triage-plan-consumed-YYYY-MM-DD.json` |
-| `daily-feed/` | Directory of daily feed artifacts. Contains `YYYY-MM-DD.md` (deterministic briefing), `YYYY-MM-DD.pdf` (magazine PDF when `--magazine` used, else plain PDF), `YYYY-MM-DD-report.md` (NLM report — v3 markdown), `YYYY-MM-DD-report.pdf` (NLM report PDF), `YYYY-MM-DD-podcast-raw.mp4` (original audio/mp4 from NLM), `YYYY-MM-DD-podcast.mp3` (compressed 48kbps) |
+| `daily-feed/` | Directory of daily feed artifacts. Contains `YYYY-MM-DD.md` (deterministic briefing), `YYYY-MM-DD.pdf` (magazine PDF when `--magazine` used, else plain PDF), `YYYY-MM-DD-report.md` (NLM report — v3 markdown), `YYYY-MM-DD-report.pdf` (NLM report PDF), `YYYY-MM-DD-podcast-raw.mp4` (original audio/mp4 from NLM), `YYYY-MM-DD-podcast.mp3` (compressed 48kbps), `YYYY-MM-DD-sources.txt` (deterministic manifest of source URLs actually added to the notebook, written at source-add time; consumed by `enhance_report.py` to build the report's `## Source Links` from ground truth) |
 | `archive/` | Archived old news items. `news-YYYY-MM.json` files grouped by month. Created by `scripts/archive_old_news.py` (weekly pipeline Step 0). |
 
 ## Categories
