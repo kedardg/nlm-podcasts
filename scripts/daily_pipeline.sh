@@ -67,6 +67,9 @@ REPORT_PDF="$FEED_DIR/$DATE-report.pdf"
 PODCAST_RAW="$FEED_DIR/$DATE-podcast-raw.mp4"
 PODCAST="$FEED_DIR/$DATE-podcast.mp3"
 SRC_MANIFEST="$FEED_DIR/$DATE-sources.txt"
+DEEPDIVE_MD="$FEED_DIR/$DATE-deepdive.md"
+DEEPDIVE_PDF="$FEED_DIR/$DATE-deepdive.pdf"
+DEEPDIVE_PLAN="$FEED_DIR/$DATE-deepdive-plan.json"
 
 PIPELINE_START=$(date +%s)
 STEP_DURATIONS=""
@@ -556,6 +559,18 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
         echo ""
     fi
 
+    # ── Step 6.6: Deep Dive Review (per-paper explainers; Phase 1 = text-only) ──
+    # Writes DATE-deepdive.{md,pdf} and a one-way DATE-deepdive-plan.json naming the
+    # top<=3 papers for per-paper podcasts (Phase 2 consumes the plan). Needs the
+    # notebook (nlm notebook query) so it lives inside the !SKIP_NLM guard.
+    if [[ -f "$REPORT_MD" ]]; then
+        log "Step 6.6: Generate Deep Dive Review (per-paper explainers)"
+        DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/src/pipeline/deep_dive_generator.py" \
+            --date "$DATE" --notebook-id "$NOTEBOOK_ID" --report-md "$REPORT_MD" 2>&1 && \
+            step_ok "deepdive" || step_fail "deepdive"
+        echo ""
+    fi
+
 fi
 
 # ── Step 7: Get share link ─────────────────────────────────────
@@ -613,6 +628,13 @@ Notebook: $SHARE_LINK"
     if [[ -f "$PODCAST" ]]; then
         tg_send_audio "$PODCAST" "Daily Feed Podcast — $DATE" 2>&1 && \
             step_ok "telegram-podcast" || step_fail "telegram-podcast"
+    fi
+
+    # Message 4: Deep Dive Review PDF (per-paper explainers). Phase 2 adds the
+    # per-paper podcast MP3s here.
+    if [[ -f "$DEEPDIVE_PDF" ]]; then
+        tg_send_file "$DEEPDIVE_PDF" "Deep Dive Review — $DATE" 2>&1 && \
+            step_ok "telegram-deepdive" || step_fail "telegram-deepdive"
     fi
 fi
 echo ""
