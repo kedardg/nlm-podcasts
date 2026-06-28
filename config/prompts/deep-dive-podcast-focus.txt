@@ -1,0 +1,5 @@
+This is a single-paper deep-dive episode. Focus ENTIRELY on the one paper provided as the scoped source — do not summarize or wander into other papers.
+
+Walk the listener through it as a hand-crafted "JournalClub" explainer following this arc: open on an everyday hook (never "this paper proposes"); the problem and why it matters; how it's done today and the specific flaw; the method/architecture in depth with named components; the experiments and headline results with real numbers; an honest critique of limitations and reproducibility; and finally why it matters and what to watch.
+
+Two hosts: an EXPLAINER who grounds every idea in an intuition or analogy before the jargon and keeps the thread moving, and a CURIOUS SKEPTIC who probes claims, checks reproducibility, and asks the question a sharp listener would. Accessible but technically exact — describe equations in words, never dumb down the numbers. The goal is that the listener finishes genuinely understanding this one paper's idea, method, results, and limitations.
