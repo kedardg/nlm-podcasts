@@ -114,10 +114,12 @@ ensure_auth_or_rotate() {
 # ── Pipeline lock (prevent daily + weekly from running simultaneously) ──
 LOCKDIR="$PROJECT_ROOT/data/.pipeline.lock"
 if ! mkdir "$LOCKDIR" 2>/dev/null; then
-    # Check if stale (older than 2 hours)
+    # Check if stale (older than 4 hours — sized above the worst-case run:
+    # Step 5 (60m) + Step 6 audio (60m) + Step 6.6 deep dives, so a slow-but-live
+    # run is never mistaken for stale and double-run).
     if [[ -d "$LOCKDIR" ]]; then
         LOCK_AGE=$(( $(date +%s) - $(stat -c %Y "$LOCKDIR" 2>/dev/null || stat -f %m "$LOCKDIR" 2>/dev/null || echo 0) ))
-        if [[ $LOCK_AGE -gt 7200 ]]; then
+        if [[ $LOCK_AGE -gt 14400 ]]; then
             log "WARNING: Removing stale lock (${LOCK_AGE}s old)"
             rmdir "$LOCKDIR" 2>/dev/null
             mkdir "$LOCKDIR" 2>/dev/null || { log "ERROR: Cannot acquire lock"; exit 1; }
@@ -428,11 +430,11 @@ fi
 
 # ── Step 5: Poll for completion ────────────────────────────────
 if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
-    log "Step 5: Polling studio status (max 40 min)..."
-    # 40 min: audio gen is rarely >15 min, and the 180-min ceiling risked the daily
-    # run + Step 6.6 deep dives overrunning the 2-hour stale-lock window (lets a
-    # manual /process double-run and create duplicate notebooks/audios).
-    MAX_WAIT=2400
+    log "Step 5: Polling studio status (max 60 min)..."
+    # 60 min headroom for generation. The stale-lock threshold (4 h) is sized to
+    # cover this + Step 6 (60 min) + Step 6.6 deep dives so a slow run can't let a
+    # manual /process double-run and create duplicate notebooks/audios.
+    MAX_WAIT=3600
     WAITED=0
     POLL_INTERVAL=30
     AUTH_FAILURES=0
@@ -509,9 +511,9 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
         log "  Podcast already downloaded: $PODCAST_RAW"
         step_ok "podcast-download (cached)"
     else
-        # Wait for audio to be ready (poll up to 10 min with 30s intervals)
+        # Wait for audio to be ready (poll up to 60 min with 30s intervals)
         AUDIO_WAIT=0
-        AUDIO_MAX=1800
+        AUDIO_MAX=3600
         while [[ $AUDIO_WAIT -lt $AUDIO_MAX ]]; do
             ensure_auth_or_rotate || true
             AUDIO_STATUS=$($NLM studio status "$NOTEBOOK_ID" 2>&1)
