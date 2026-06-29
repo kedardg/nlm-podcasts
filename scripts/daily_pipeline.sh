@@ -428,8 +428,11 @@ fi
 
 # ── Step 5: Poll for completion ────────────────────────────────
 if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
-    log "Step 5: Polling studio status (max 180 min)..."
-    MAX_WAIT=10800
+    log "Step 5: Polling studio status (max 40 min)..."
+    # 40 min: audio gen is rarely >15 min, and the 180-min ceiling risked the daily
+    # run + Step 6.6 deep dives overrunning the 2-hour stale-lock window (lets a
+    # manual /process double-run and create duplicate notebooks/audios).
+    MAX_WAIT=2400
     WAITED=0
     POLL_INTERVAL=30
     AUTH_FAILURES=0
@@ -565,9 +568,13 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
     # notebook (nlm notebook query) so it lives inside the !SKIP_NLM guard.
     if [[ -f "$REPORT_MD" ]]; then
         log "Step 6.6: Generate Deep Dive Review (per-paper explainers)"
-        DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/src/pipeline/deep_dive_generator.py" \
-            --date "$DATE" --notebook-id "$NOTEBOOK_ID" --report-md "$REPORT_MD" 2>&1 && \
-            step_ok "deepdive" || step_fail "deepdive"
+        if [[ -s "$DEEPDIVE_PDF" ]]; then
+            step_ok "deepdive (cached)"   # idempotent rerun — don't re-query NLM
+        else
+            DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/src/pipeline/deep_dive_generator.py" \
+                --date "$DATE" --notebook-id "$NOTEBOOK_ID" --report-md "$REPORT_MD" 2>&1 && \
+                step_ok "deepdive" || step_fail "deepdive"
+        fi
         echo ""
     fi
 
@@ -588,6 +595,9 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
             DD_SLUG=$($PYTHON -c "import json; print(json.load(open('$DEEPDIVE_PLAN'))['papers'][$di].get('slug') or 'paper$di')" 2>/dev/null)
             DD_FOCUS=$($PYTHON -c "import json; print(json.load(open('$DEEPDIVE_PLAN'))['papers'][$di].get('focus_prompt') or '')" 2>/dev/null)
             [[ -z "$DD_SID" ]] && { log "  skip (no source_id): $DD_SLUG"; continue; }
+            # Idempotent rerun: don't re-create a podcast whose MP3 already exists
+            # (avoids duplicate NLM audio artifacts on the notebook).
+            [[ -s "$FEED_DIR/$DATE-deepdive-$DD_SLUG-podcast.mp3" ]] && { log "  cached: $DD_SLUG"; continue; }
             ensure_auth_or_rotate || true
             DD_CREATE=$($NLM audio create "$NOTEBOOK_ID" --source-ids "$DD_SID" --focus "$DD_FOCUS" --format deep_dive --length short --confirm 2>&1)
             # Anchor to the labelled "Artifact ID:" line so we never grab a notebook/trace UUID.
