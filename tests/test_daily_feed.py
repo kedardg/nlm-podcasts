@@ -131,24 +131,29 @@ class TestCollectTodayItems:
             hour = int(item["extracted_at"][11:13])
             assert hour >= cutoff_hour
 
-    def test_date_filter_excludes_other_dates(self, tmp_path, monkeypatch):
-        """Items from other dates are excluded."""
+    def test_date_filter_uses_two_day_window(self, tmp_path, monkeypatch):
+        """collect_today_items keeps today + yesterday (2-day window) and excludes
+        older items. (The window is [target+1, target, target-1] to also catch items
+        fetched just after UTC midnight.)"""
         _no_semantic_dedup(monkeypatch)
         sources_file = _write_sources(tmp_path, [
-            _make_source(1, date="2026-03-09"),
-            _make_source(2, date="2026-03-10"),
+            _make_source(1, date="2026-03-10"),   # today — in window
+            _make_source(2, date="2026-03-09"),   # yesterday — in window
+            _make_source(3, date="2026-03-05"),   # last week — out of window
         ])
         news_file = _write_news(tmp_path, [
-            _make_article(1, date="2026-03-09"),
-            _make_article(2, date="2026-03-10"),
+            _make_article(1, date="2026-03-10"),  # today — in window
+            _make_article(2, date="2026-03-01"),  # out of window
         ])
         monkeypatch.setattr(dfg, "SOURCES_FILE", sources_file)
         monkeypatch.setattr(dfg, "NEWS_QUEUE_FILE", news_file)
 
         items = dfg.collect_today_items("2026-03-10")
-        assert len(items) == 2
-        for item in items:
-            assert "2026-03-10" in item["added_at"]
+        dates = {item["added_at"][:10] for item in items}
+        assert "2026-03-10" in dates        # today included
+        assert "2026-03-09" in dates        # yesterday included (2-day window)
+        assert "2026-03-05" not in dates    # older source excluded
+        assert "2026-03-01" not in dates    # older article excluded
 
 
 # ── Tests: semantic dedup ─────────────────────────────────────────────────────
