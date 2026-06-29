@@ -45,8 +45,13 @@ CDP_PORTS = range(9222, 9232)
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"
 
 
-def get_audio_url(notebook_id: str) -> str | None:
-    """Get the audio download URL from NLM studio metadata."""
+def get_audio_url(notebook_id: str, artifact_id: str | None = None) -> str | None:
+    """Get the audio download URL from NLM studio metadata.
+
+    If artifact_id is given, only that artifact's audio is returned (needed when a
+    notebook holds several audios, e.g. the daily podcast + per-paper deep dives).
+    Otherwise the first completed audio is used (legacy single-podcast behaviour).
+    """
     # Add NLM packages to path
     nlm_pkg = Path.home() / ".local/share/uv/tools/notebooklm-mcp-cli/lib"
     for p in nlm_pkg.glob("python*/site-packages"):
@@ -65,6 +70,8 @@ def get_audio_url(notebook_id: str) -> str | None:
         for a in artifacts:
             if isinstance(a, list) and len(a) > 4 and a[2] == 1 and a[4] == 3:
                 # Type 1 = audio, Status 3 = completed
+                if artifact_id and str(a[0]) != artifact_id:
+                    continue  # not the requested artifact (str-safe: argparse gives str)
                 meta = a[6]
                 if isinstance(meta, list) and len(meta) > 5:
                     media_list = meta[5]
@@ -188,6 +195,8 @@ def main():
     parser = argparse.ArgumentParser(description="Download NLM audio via Chrome CDP cookies")
     parser.add_argument("notebook_id", help="Notebook ID or alias")
     parser.add_argument("--output", "-o", help="Output file path")
+    parser.add_argument("--id", dest="artifact_id", default=None,
+                        help="Specific audio artifact ID (for notebooks with multiple audios)")
     args = parser.parse_args()
 
     notebook_id = args.notebook_id
@@ -208,9 +217,10 @@ def main():
     print(f"Downloading audio for notebook {notebook_id}")
 
     # Step 1: Get audio URL from NLM metadata
-    audio_url = get_audio_url(notebook_id)
+    audio_url = get_audio_url(notebook_id, args.artifact_id)
     if not audio_url:
-        print("ERROR: No completed audio found in notebook", file=sys.stderr)
+        which = f" (artifact {args.artifact_id})" if args.artifact_id else ""
+        print(f"ERROR: No completed audio found in notebook{which}", file=sys.stderr)
         sys.exit(1)
     print(f"  Audio URL: {audio_url[:80]}...")
 

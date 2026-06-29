@@ -53,10 +53,12 @@ PAPER_DOMAINS = {
 
 # A whole-answer refusal usually appears up front and is short; we only flag it
 # in the opening of the text so a legitimate "limitations" mention doesn't trip it.
+# Answer-shaped refusal phrases only — avoid bare substrings ("no information",
+# "i cannot") that legitimately appear in technical ML prose.
 REFUSAL_MARKERS = (
     "cannot answer", "can't answer", "do not have enough", "don't have enough",
-    "not enough information", "no information", "unable to answer",
-    "cannot find", "could not find", "i cannot", "i'm unable",
+    "not enough information", "unable to answer", "i'm unable", "i am unable",
+    "do not contain enough", "cannot provide an",
 )
 
 
@@ -103,10 +105,10 @@ def _is_paper_url(url: str) -> bool:
 # ── NLM I/O (module-level so tests can monkeypatch) ────────────────────────────
 
 def nlm_source_map(notebook_id: str) -> dict:
-    """Build {normalize_url_deep(url): source_id} from `nlm source list --json`.
-
-    Returns {} on any failure (auth, parse) — callers degrade gracefully.
-    """
+    """Build {normalize_url_deep(url): {"source_id", "title"}} from
+    `nlm source list --json`. This is the AUTHORITATIVE paper set — the notebook's
+    actual sources reliably carry the arXiv URLs even when the report drops its
+    per-article **Source:** lines. Returns {} on any failure (callers degrade)."""
     if not notebook_id:
         return {}
     try:
@@ -123,7 +125,7 @@ def nlm_source_map(notebook_id: str) -> dict:
         url = it.get("url")
         sid = it.get("id") or it.get("source_id")
         if url and sid:
-            out_map[normalize_url_deep(url)] = sid
+            out_map[normalize_url_deep(url)] = {"source_id": sid, "title": it.get("title") or ""}
     return out_map
 
 
@@ -139,7 +141,10 @@ def nlm_query(notebook_id: str, question: str, source_ids: list[str] | None = No
         out = subprocess.run(cmd, capture_output=True, text=True,
                              timeout=timeout + 30).stdout
         data = json.loads(out)
-    except (subprocess.SubprocessError, json.JSONDecodeError, OSError):
+    except (subprocess.SubprocessError, json.JSONDecodeError, OSError) as e:
+        # Transport/parse failure — distinguishable from an empty answer in logs so
+        # an all-stub PDF (e.g. auth break) is diagnosable.
+        print(f"WARN: nlm query failed: {e}", file=sys.stderr)
         return ""
     return (data.get("value", {}) or {}).get("answer", "") or ""
 
@@ -164,19 +169,31 @@ def select_top_papers(url_map: dict, source_map: dict, confidence_map: dict,
                       *, max_podcast: int = 3) -> tuple[list, list]:
     """Return (all_explainer_papers, podcast_papers).
 
-    all_explainer_papers: every research paper in the report, ranked (PDF).
+    Paper set = the union of paper URLs in the notebook's source list (authoritative)
+    and the report's url_map (enrichment). Each paper is enriched from the report
+    where available (significance, title, analysis body); papers present only in the
+    notebook default to "medium" significance so they still rank for a podcast.
+
+    all_explainer_papers: every paper, ranked (PDF).
     podcast_papers: top `max_podcast` with significance >= medium AND a source_id
     (needed to scope `audio create --source-ids`). Never padded.
     """
+    paper_urls = {u for u in source_map if _is_paper_url(u)} | {u for u in url_map if _is_paper_url(u)}
+
     candidates: list[PaperCandidate] = []
-    for url, meta in url_map.items():
-        if not _is_paper_url(url):
-            continue
+    for url in paper_urls:
+        meta = url_map.get(url, {})
+        src = source_map.get(url, {})
+        title = (meta.get("title") or src.get("title") or url).strip()
+        # Report significance when covered; "medium" floor otherwise (a paper the
+        # report didn't rate is still presumably worth reviewing, and must not sort
+        # below a notebook-only paper).
+        significance = (meta.get("significance") or "medium").lower()
         candidates.append(PaperCandidate(
             url=url,
-            source_id=source_map.get(url),
-            title=(meta.get("title") or url).strip(),
-            significance=(meta.get("significance") or "low").lower(),
+            source_id=src.get("source_id"),
+            title=title,
+            significance=significance,
             confidence=confidence_map.get(url, 0.0),
             summary=(meta.get("tldr") or meta.get("body") or "").strip(),
         ))
@@ -198,7 +215,7 @@ def meets_content_floor(text: str, min_chars: int = 600) -> bool:
     non_ws = len(re.sub(r"\s+", "", text))
     if non_ws < min_chars:
         return False
-    opening = text[:180].lower()
+    opening = text[:300].lower()
     if any(m in opening for m in REFUSAL_MARKERS):
         return False
     return True
@@ -210,10 +227,13 @@ def _clean_explainer(text: str) -> str:
     if text.startswith("```"):
         text = re.sub(r"^```[a-zA-Z]*\n?", "", text)
         text = re.sub(r"\n?```$", "", text).strip()
-    # Drop a leading "# Title" / "## Title" line (the generator adds its own h2).
-    text = re.sub(r"\A#{1,2} .*\n+", "", text)
-    # Remove inline citation markers like [1], [2,3].
-    text = re.sub(r"\s*\[\d+(?:,\s*\d+)*\]", "", text)
+    # Drop up to two leading h1/h2 title lines (the generator adds its own h2).
+    # `(?!#)` guarantees we never strip the ### beat headings (1-2 hashes only).
+    text = re.sub(r"\A(#{1,2}(?!#).*\n+){1,2}", "", text)
+    # Remove space-separated citation markers ("...transformer [1].") while sparing
+    # attached bracketed quantities (array[0], x[12]): citations have whitespace
+    # before the bracket; quantities attach directly to a token.
+    text = re.sub(r"(?<=\w)[ \t]\[\d+(?:,\s*\d+)*\](?=[\s.,;:)]|$)", "", text)
     return text.strip()
 
 
@@ -248,9 +268,16 @@ def build_deepdive_markdown(date_str: str, entries: list[dict]) -> str:
 
 def build_plan(date_str: str, podcast_papers: list, focus_template: str) -> dict:
     papers = []
+    seen_slugs: dict[str, int] = {}
     for p in podcast_papers:
+        slug = p.slug()
+        if slug in seen_slugs:  # dedup so per-paper podcast files never clobber
+            seen_slugs[slug] += 1
+            slug = f"{slug}-{seen_slugs[slug]}"
+        else:
+            seen_slugs[slug] = 1
         focus = f"{focus_template}\n\nThe paper is: {p.title} ({p.url})."
-        papers.append({"source_id": p.source_id, "slug": p.slug(),
+        papers.append({"source_id": p.source_id, "slug": slug,
                        "title": p.title, "focus_prompt": focus})
     return {"date": date_str, "generated_at": now_iso(), "papers": papers}
 
@@ -260,7 +287,8 @@ def build_plan(date_str: str, podcast_papers: list, focus_template: str) -> dict
 def run(*, date_str: str, notebook_id: str, report_md_path: str,
         output_dir: Path | None = None, max_podcast: int = 3,
         dry_run: bool = False) -> dict:
-    sys.path.insert(0, str(PROJECT_ROOT))  # for daily_feed_generator import
+    if str(PROJECT_ROOT) not in sys.path:  # for daily_feed_generator import
+        sys.path.insert(0, str(PROJECT_ROOT))
     from daily_feed_generator import parse_nlm_report
 
     out_dir = output_dir or DAILY_FEED_DIR
@@ -336,7 +364,7 @@ def main():
         max_podcast=args.max_podcast,
         dry_run=args.dry_run,
     )
-    print(json.dumps(result, indent=2) if result else "{}")
+    print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":

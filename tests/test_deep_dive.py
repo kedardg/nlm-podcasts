@@ -8,6 +8,7 @@ from pipeline.deep_dive_generator import (
     explain_paper,
     build_plan,
     build_deepdive_markdown,
+    _clean_explainer,
     _is_paper_url,
     _sig_rank,
 )
@@ -21,6 +22,11 @@ def _url_map_entry(title, significance, tldr="A grounded summary."):
 def _make_url_map(specs):
     """specs: list of (url, significance, title)."""
     return {normalize_url_deep(u): _url_map_entry(t, s) for (u, s, t) in specs}
+
+
+def _smap(mapping):
+    """Wrap {url: source_id} into the nlm_source_map shape {url: {source_id, title}}."""
+    return {k: {"source_id": v, "title": ""} for k, v in mapping.items()}
 
 
 # ── Paper detection ──────────────────────────────────────────────────────────
@@ -57,7 +63,7 @@ class TestSelectTopPapers:
     def test_single_high_paper_with_source(self):
         u = normalize_url_deep("https://arxiv.org/abs/2601.00001")
         url_map = _make_url_map([(u, "high", "Paper A")])
-        explainers, podcasts = select_top_papers(url_map, {u: "sid-a"}, {})
+        explainers, podcasts = select_top_papers(url_map, _smap({u: "sid-a"}), {})
         assert len(explainers) == 1
         assert len(podcasts) == 1 and podcasts[0].source_id == "sid-a"
 
@@ -66,7 +72,7 @@ class TestSelectTopPapers:
             ("https://arxiv.org/abs/2601.00002", "low", "Low Paper 1"),
             ("https://arxiv.org/abs/2601.00003", "low", "Low Paper 2"),
         ])
-        smap = {k: f"sid-{i}" for i, k in enumerate(url_map)}
+        smap = _smap({k: f"sid-{i}" for i, k in enumerate(url_map)})
         explainers, podcasts = select_top_papers(url_map, smap, {})
         assert len(explainers) == 2
         assert podcasts == []  # low never gets a podcast
@@ -76,7 +82,7 @@ class TestSelectTopPapers:
             ("https://arxiv.org/abs/2601.00004", "high", "P1"),
             ("https://arxiv.org/abs/2601.00005", "medium", "P2"),
         ])
-        smap = {k: f"sid-{i}" for i, k in enumerate(url_map)}
+        smap = _smap({k: f"sid-{i}" for i, k in enumerate(url_map)})
         explainers, podcasts = select_top_papers(url_map, smap, {}, max_podcast=3)
         assert len(explainers) == 2
         assert len(podcasts) == 2  # min(N, 3), never padded
@@ -84,7 +90,7 @@ class TestSelectTopPapers:
     def test_over_supply_capped_at_three(self):
         specs = [(f"https://arxiv.org/abs/2601.1000{i}", "high", f"P{i}") for i in range(6)]
         url_map = _make_url_map(specs)
-        smap = {k: f"sid-{i}" for i, k in enumerate(url_map)}
+        smap = _smap({k: f"sid-{i}" for i, k in enumerate(url_map)})
         explainers, podcasts = select_top_papers(url_map, smap, {}, max_podcast=3)
         assert len(explainers) == 6
         assert len(podcasts) == 3
@@ -94,7 +100,7 @@ class TestSelectTopPapers:
         u_without = normalize_url_deep("https://arxiv.org/abs/2601.00011")
         url_map = _make_url_map([(u_with, "high", "Has source"),
                                  (u_without, "high", "No source")])
-        explainers, podcasts = select_top_papers(url_map, {u_with: "sid"}, {})
+        explainers, podcasts = select_top_papers(url_map, _smap({u_with: "sid"}), {})
         assert len(explainers) == 2                      # both get explainers
         assert [p.source_id for p in podcasts] == ["sid"]  # only the scoped one gets a podcast
 
@@ -103,7 +109,7 @@ class TestSelectTopPapers:
             ("https://arxiv.org/abs/2601.00020", "medium", "Med"),
             ("https://arxiv.org/abs/2601.00021", "high", "High"),
         ])
-        smap = {k: "s" for k in url_map}
+        smap = _smap({k: "s" for k in url_map})
         explainers, _ = select_top_papers(url_map, smap, {})
         assert explainers[0].title == "High"
 
@@ -117,7 +123,7 @@ class TestSelectTopPapers:
     def test_deterministic_across_runs(self):
         specs = [(f"https://arxiv.org/abs/2601.200{i}", "high", f"P{i}") for i in range(4)]
         url_map = _make_url_map(specs)
-        smap = {k: f"s{i}" for i, k in enumerate(url_map)}
+        smap = _smap({k: f"s{i}" for i, k in enumerate(url_map)})
         r1 = [p.url for p in select_top_papers(url_map, smap, {})[0]]
         r2 = [p.url for p in select_top_papers(url_map, smap, {})[0]]
         assert r1 == r2  # stable order (url is the unique final tiebreak)
@@ -132,7 +138,7 @@ class TestSourceMatching:
         pdf_key = normalize_url_deep("https://arxiv.org/pdf/2605.07912.pdf")
         assert abs_key == pdf_key
         url_map = {abs_key: _url_map_entry("Paper", "high")}
-        source_map = {pdf_key: "sid-x"}
+        source_map = _smap({pdf_key: "sid-x"})
         _, podcasts = select_top_papers(url_map, source_map, {})
         assert podcasts[0].source_id == "sid-x"
 
@@ -156,6 +162,25 @@ class TestContentFloor:
         text = ("This paper introduces a strong method with clear results. " * 25
                 + "A limitation is that there is no information on long-context behavior.")
         assert meets_content_floor(text)
+
+    def test_technical_no_information_phrase_passes(self):
+        # "no information" is a real ML phrase (info bottleneck) — not a refusal marker
+        assert meets_content_floor("The encoder enforces no information leakage. " * 30)
+
+
+class TestCleanExplainer:
+    def test_strips_spaced_citations_spares_attached_quantities(self):
+        c = _clean_explainer("The transformer [1] uses array[0] and x[12] of input [2,3].")
+        assert "array[0]" in c and "x[12]" in c   # attached quantities spared
+        assert "[1]" not in c and "[2,3]" not in c  # spaced citations stripped
+
+    def test_strips_leading_h1_h2_titles_keeps_beats(self):
+        c = _clean_explainer("# Paper Title\n## Subtitle\n### 1. The hook\nbody")
+        assert c.startswith("### 1. The hook")  # h1/h2 stripped, ### beat kept
+
+    def test_strips_code_fence(self):
+        c = _clean_explainer("```markdown\n### 1. The hook\ntext\n```")
+        assert c.startswith("### 1. The hook") and "```" not in c
 
 
 # ── Explainer generation (mocked NLM) ─────────────────────────────────────────
@@ -183,7 +208,7 @@ class TestExplainPaper:
         raw = "# Paper\n### 1. The hook\n" + ("Grounded text [1] with markers [2,3]. " * 40)
         body, method = explain_paper("nb", self._paper(), "p", query_fn=lambda *a, **k: raw)
         assert method == "nlm"
-        assert "[1]" not in body and "[2,3]" not in body
+        assert " [1]" not in body and " [2,3]" not in body
         assert not body.startswith("# Paper")
 
     def test_query_scoped_to_source_id(self):

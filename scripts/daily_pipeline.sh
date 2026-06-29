@@ -571,6 +571,79 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
         echo ""
     fi
 
+    # ── Step 6.6b: Deep Dive per-paper podcasts (Phase 2) ──────
+    # From DATE-deepdive-plan.json: fire one source-scoped `audio create` per top
+    # paper (verified to parallelize on one notebook), poll studio status BY ARTIFACT
+    # ID (the notebook also holds the daily podcast), then download (--id) + compress
+    # each as it completes. Per-paper deadline + isolation: one failure never aborts
+    # the batch, the PDF, or the rest of the pipeline.
+    DD_PAPER_COUNT=0
+    [[ -f "$DEEPDIVE_PLAN" ]] && DD_PAPER_COUNT=$($PYTHON -c "import json; print(len(json.load(open('$DEEPDIVE_PLAN')).get('papers', [])))" 2>/dev/null || echo 0)
+    if [[ "$DD_PAPER_COUNT" =~ ^[0-9]+$ ]] && [[ "$DD_PAPER_COUNT" -gt 0 ]]; then
+        log "Step 6.6b: Deep Dive per-paper podcasts ($DD_PAPER_COUNT)"
+        DD_SLUGS=(); DD_AIDS=(); DD_DEADLINES=()
+        # 1. Fire all scoped audio creates (staggered to avoid a burst), capture ids
+        for ((di=0; di<DD_PAPER_COUNT; di++)); do
+            DD_SID=$($PYTHON -c "import json; print(json.load(open('$DEEPDIVE_PLAN'))['papers'][$di].get('source_id') or '')" 2>/dev/null)
+            DD_SLUG=$($PYTHON -c "import json; print(json.load(open('$DEEPDIVE_PLAN'))['papers'][$di].get('slug') or 'paper$di')" 2>/dev/null)
+            DD_FOCUS=$($PYTHON -c "import json; print(json.load(open('$DEEPDIVE_PLAN'))['papers'][$di].get('focus_prompt') or '')" 2>/dev/null)
+            [[ -z "$DD_SID" ]] && { log "  skip (no source_id): $DD_SLUG"; continue; }
+            ensure_auth_or_rotate || true
+            DD_CREATE=$($NLM audio create "$NOTEBOOK_ID" --source-ids "$DD_SID" --focus "$DD_FOCUS" --format deep_dive --length short --confirm 2>&1)
+            # Anchor to the labelled "Artifact ID:" line so we never grab a notebook/trace UUID.
+            DD_AID=$(echo "$DD_CREATE" | grep -oiE 'Artifact ID:[[:space:]]*[a-f0-9-]{36}' | grep -oiE '[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}' | head -1)
+            if [[ -n "$DD_AID" ]]; then
+                DD_SLUGS+=("$DD_SLUG"); DD_AIDS+=("$DD_AID"); DD_DEADLINES+=($(( $(date +%s) + 1200 )))
+                log "  fired: $DD_SLUG ($DD_AID)"
+            else
+                log "  FAILED to start: $DD_SLUG"
+            fi
+            sleep 8
+        done
+        # 2. Poll by artifact id; download + compress each as it completes
+        DD_REMAIN=${#DD_AIDS[@]}
+        DD_DONE=0
+        while [[ $DD_REMAIN -gt 0 ]]; do
+            DD_SJSON=$($NLM studio status "$NOTEBOOK_ID" --json 2>/dev/null)
+            # Reactive auth recovery: only rotate when status came back empty (likely
+            # cookie expiry over a long poll) — not every tick (avoids rate-limit churn).
+            [[ -z "$DD_SJSON" ]] && { ensure_auth_or_rotate || true; }
+            DD_REMAIN=0
+            for di in "${!DD_AIDS[@]}"; do
+                DD_AID="${DD_AIDS[$di]}"; DD_SLUG="${DD_SLUGS[$di]}"
+                [[ -z "$DD_AID" ]] && continue   # already handled
+                DD_ST=$(printf '%s' "$DD_SJSON" | $PYTHON -c "import json,sys
+try:
+    d=json.load(sys.stdin); a=d if isinstance(d,list) else d.get('artifacts', d)
+    a=a if isinstance(a,list) else [a]
+    print(next((x.get('status','') for x in a if x.get('id')=='$DD_AID'), ''))
+except Exception:
+    print('')" 2>/dev/null)
+                if [[ "$DD_ST" == "completed" ]]; then
+                    DD_RAW="$FEED_DIR/$DATE-deepdive-$DD_SLUG-podcast-raw.mp4"
+                    DD_MP3="$FEED_DIR/$DATE-deepdive-$DD_SLUG-podcast.mp3"
+                    $NLM download audio "$NOTEBOOK_ID" --id "$DD_AID" --output "$DD_RAW" 2>/dev/null
+                    [[ ! -s "$DD_RAW" ]] && $PYTHON "$PROJECT_ROOT/src/nlm/nlm_download_audio.py" "$NOTEBOOK_ID" --id "$DD_AID" --output "$DD_RAW" 2>/dev/null
+                    if [[ -s "$DD_RAW" ]]; then
+                        $FFMPEG -y -i "$DD_RAW" -ac 1 -b:a 48k -ar 22050 "$DD_MP3" 2>/dev/null && DD_DONE=$((DD_DONE + 1))
+                        log "  OK: $DD_SLUG"
+                    else
+                        log "  download failed: $DD_SLUG"
+                    fi
+                    DD_AIDS[$di]=""
+                elif [[ $(date +%s) -gt ${DD_DEADLINES[$di]} ]]; then
+                    log "  TIMEOUT: $DD_SLUG"
+                    DD_AIDS[$di]=""
+                else
+                    DD_REMAIN=$((DD_REMAIN + 1))
+                fi
+            done
+            [[ $DD_REMAIN -gt 0 ]] && sleep 30
+        done
+        step_ok "deepdive-podcasts ($DD_DONE/${#DD_SLUGS[@]})"
+        echo ""
+    fi
+
 fi
 
 # ── Step 7: Get share link ─────────────────────────────────────
@@ -630,12 +703,19 @@ Notebook: $SHARE_LINK"
             step_ok "telegram-podcast" || step_fail "telegram-podcast"
     fi
 
-    # Message 4: Deep Dive Review PDF (per-paper explainers). Phase 2 adds the
-    # per-paper podcast MP3s here.
+    # Message 4: Deep Dive Review PDF (per-paper explainers)
     if [[ -f "$DEEPDIVE_PDF" ]]; then
         tg_send_file "$DEEPDIVE_PDF" "Deep Dive Review — $DATE" 2>&1 && \
             step_ok "telegram-deepdive" || step_fail "telegram-deepdive"
     fi
+
+    # Message 5+: Deep Dive per-paper podcast episodes (Phase 2)
+    for DD_MP3 in "$FEED_DIR/$DATE"-deepdive-*-podcast.mp3; do
+        [[ -e "$DD_MP3" ]] || continue   # no matches → glob stays literal
+        DD_NAME="${DD_MP3##*/}"; DD_NAME="${DD_NAME#"$DATE"-deepdive-}"; DD_NAME="${DD_NAME%-podcast.mp3}"
+        tg_send_audio "$DD_MP3" "Deep Dive Podcast — $DD_NAME" 2>&1 && \
+            step_ok "telegram-deepdive-podcast" || step_fail "telegram-deepdive-podcast"
+    done
 fi
 echo ""
 
