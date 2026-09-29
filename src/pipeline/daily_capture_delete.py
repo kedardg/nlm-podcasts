@@ -59,6 +59,49 @@ def check_capacity():
     return count, True
 
 
+def wait_for_artifacts(notebook_id, kinds, timeout, interval):
+    """Wait until every requested artifact kind is terminal.
+
+    The previous shell poll asked "is anything in_progress?" and treated "no"
+    as done. Seconds after `report create` the artifact is not registered yet,
+    so the status mentions nothing at all — and the poll exited immediately,
+    reporting completion in 0s while the report did not exist. Requiring
+    positive confirmation per kind is the fix; absence of evidence was never
+    evidence of completion.
+    """
+    import time
+
+    deadline = time.time() + timeout
+    wanted = set(kinds)
+    while time.time() < deadline:
+        ok, artifacts = client.studio_status(notebook_id)
+        if not ok:
+            log("studio status unavailable; retrying")
+            time.sleep(interval)
+            continue
+        by_kind = {}
+        for art in artifacts or []:
+            kind = art.get("type") or art.get("artifact_type")
+            status = (art.get("status") or "").lower()
+            # 'completed' beats anything else we may have seen for this kind.
+            if by_kind.get(kind) != "completed":
+                by_kind[kind] = status
+        done = {k for k in wanted if by_kind.get(k) == "completed"}
+        failed = {k for k in wanted if by_kind.get(k) == "failed"}
+        if failed:
+            log(f"artifact(s) failed to generate: {', '.join(sorted(failed))}")
+        if done | failed >= wanted:
+            log(f"artifacts ready: {', '.join(sorted(done))}"
+                + (f" (failed: {', '.join(sorted(failed))})" if failed else ""))
+            return not failed
+        pending = sorted(wanted - done - failed)
+        log(f"waiting on {', '.join(pending)} "
+            f"({int(deadline - time.time())}s left)")
+        time.sleep(interval)
+    log(f"timed out waiting for {', '.join(sorted(wanted))}")
+    return False
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--notebook-id", help="the notebook this run created")
@@ -71,6 +114,11 @@ def main():
     ap.add_argument("--allow-thin-sources", action="store_true")
     ap.add_argument("--capacity-check", action="store_true",
                     help="report account size and exit; 1 means do not create")
+    ap.add_argument("--wait-for", metavar="KINDS",
+                    help="poll until these artifact kinds are completed "
+                         "(comma-separated, e.g. report,audio), then exit 0")
+    ap.add_argument("--timeout", type=int, default=3600)
+    ap.add_argument("--poll-interval", type=int, default=30)
     ap.add_argument("--already-done", action="store_true",
                     help="exit 0 if --run-id was already captured or deleted. "
                          "Idempotency must not key on the NLM alias, because "
@@ -82,6 +130,13 @@ def main():
         if count is not None:
             print(count)
         sys.exit(0 if ok else 1)
+
+    if args.wait_for:
+        if not args.notebook_id:
+            ap.error("--wait-for requires --notebook-id")
+        sys.exit(0 if wait_for_artifacts(
+            args.notebook_id, [k.strip() for k in args.wait_for.split(",") if k.strip()],
+            args.timeout, args.poll_interval) else 1)
 
     if args.already_done:
         conn = archive_db.open_db(Path(args.data_dir) / "research.db")

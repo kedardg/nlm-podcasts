@@ -680,3 +680,53 @@ def test_deleted_notebook_is_not_reprocessed_even_if_still_listed(tmp_path):
         auth, {NB: {"id": NB, "updated_at": "2026-08-16T00:00:00Z"}},
         reclaim.skip_ids(conn))
     assert order == []
+
+
+# ── Artifact generation wait ──────────────────────────────────────────────────
+
+def _daily_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "daily_cd", PROJECT_ROOT / "src" / "pipeline" / "daily_capture_delete.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_empty_status_is_not_treated_as_finished(monkeypatch):
+    """Reproduces the real failure: seconds after `report create` the artifact
+    is not registered yet, so the status is empty. The old shell poll read that
+    as done, logged 'completed in 0s', and the report download then failed."""
+    daily = _daily_module()
+    sequence = [
+        (True, []),                                            # not registered yet
+        (True, [{"type": "report", "status": "in_progress"}]),
+        (True, [{"type": "report", "status": "completed"},
+                {"type": "audio", "status": "in_progress"}]),
+        (True, [{"type": "report", "status": "completed"},
+                {"type": "audio", "status": "completed"}]),
+    ]
+    calls = {"n": 0}
+
+    def fake_status(_notebook_id):
+        result = sequence[min(calls["n"], len(sequence) - 1)]
+        calls["n"] += 1
+        return result
+
+    monkeypatch.setattr(daily.client, "studio_status", fake_status)
+    assert daily.wait_for_artifacts(NB, ["report", "audio"], timeout=30, interval=0)
+    assert calls["n"] == 4, "returned before both artifacts were confirmed"
+
+
+def test_failed_generation_is_reported_not_waited_out(monkeypatch):
+    daily = _daily_module()
+    monkeypatch.setattr(daily.client, "studio_status", lambda _n: (
+        True, [{"type": "report", "status": "completed"},
+               {"type": "audio", "status": "failed"}]))
+    assert not daily.wait_for_artifacts(NB, ["report", "audio"], timeout=30, interval=0)
+
+
+def test_unavailable_status_keeps_waiting_rather_than_assuming_done(monkeypatch):
+    daily = _daily_module()
+    monkeypatch.setattr(daily.client, "studio_status", lambda _n: (False, None))
+    assert not daily.wait_for_artifacts(NB, ["report"], timeout=1, interval=0)

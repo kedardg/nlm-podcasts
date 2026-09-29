@@ -479,19 +479,22 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
         fi
 
         AUTH_FAILURES=0  # Reset on success
-        if echo "$STATUS_OUT" | grep -qi "in_progress\|generating\|pending"; then
-            log "  Still generating... (${WAITED}s elapsed)"
-            sleep $POLL_INTERVAL
-            WAITED=$((WAITED + POLL_INTERVAL))
-        else
-            break
-        fi
+        break
     done
 
-    if [[ $WAITED -ge $MAX_WAIT ]]; then
-        step_fail "studio-poll (timeout after ${MAX_WAIT}s)"
+    # Wait for positive confirmation that each artifact is finished.
+    #
+    # The old poll asked "does the status mention in_progress?" and treated
+    # "no" as done. In the seconds after `report create` the artifact is not
+    # registered yet, so the status mentions nothing — the poll exited
+    # immediately, logged "completed in 0s", and Step 6 then tried to download
+    # a report that did not exist. Absence of evidence was read as evidence.
+    if $PYTHON "$PROJECT_ROOT/src/pipeline/daily_capture_delete.py" \
+            --wait-for report,audio --notebook-id "$NOTEBOOK_ID" \
+            --timeout "$MAX_WAIT" --poll-interval "$POLL_INTERVAL"; then
+        step_ok "studio-poll"
     else
-        step_ok "studio-poll (completed in ${WAITED}s)"
+        step_fail "studio-poll (timeout or generation failure)"
     fi
     echo ""
 fi
