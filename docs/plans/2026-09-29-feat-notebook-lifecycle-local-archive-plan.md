@@ -1,12 +1,24 @@
 ---
 title: "Capture-then-delete NotebookLM lifecycle with a local SQLite archive"
 type: feat
-status: in-progress
+status: completed
 date: 2026-09-29
 origin: docs/brainstorms/2026-09-29-notebook-lifecycle-and-local-archive-brainstorm.md
 ---
 
 # ✨ Capture-then-delete NotebookLM lifecycle with a local SQLite archive
+
+> **Outcome (2026-09-29).** Account went from **499/500 to 172/500**. 327
+> notebooks captured and deleted; **496 artifacts (6.79 GB)** and **4,892
+> source texts (102M chars)** recovered, including podcasts and reports
+> generated months ago and never downloaded. All 34 protected notebooks
+> untouched. A full daily run completed end to end — created a notebook, added
+> 16 sources, generated and delivered a report and podcast, then archived the
+> notebook and released its slot. 337 tests passing.
+>
+> Deferred to their own plans: local RAG over the captured text (`todos/040`,
+> `todos/045`), serving `/generate` from the archive, and folding weekly's data
+> steps into daily (`todos/042`).
 
 ## Overview
 
@@ -301,17 +313,17 @@ Three read surfaces must stop needing live notebooks, or Phase 3 breaks them: `s
 
 ### Capture isolation
 - [x] Every capture writes under `data/archive/<notebook_id>/`. No path derives from a title or alias.
-- [ ] `--skip-existing` is only ever passed with an output dir scoped to one notebook id; `skipped` counts as captured only when the DB holds a matching sha256 for that same id.
+- [x] `--skip-existing` is only ever passed with an output dir scoped to one notebook id; `skipped` counts as captured only when the DB holds a matching sha256 for that same id.
 - [x] A title containing `\t`, `\x02`, `/`, `—` produces a valid path.
 
 ### Verification gate
 - [x] All 8 conditions enforced; any failure → `needs_human`, never delete.
 - [x] Mocked empty `source list` on a 16-source notebook → no delete.
 - [x] One-byte truncation → sha mismatch → no delete.
-- [ ] Non-terminal Step 6.6b artifact → no delete.
+- [x] Non-terminal Step 6.6b artifact → no delete.
 
 ### Idempotency & concurrency
-- [ ] SIGKILL at each state resumes correctly (one test per state).
+- [x] SIGKILL at each state resumes correctly (one test per state).
 - [x] Second full reclaim run is a no-op (0 downloads, 0 deletes).
 - [x] WAL + `busy_timeout ≥ 30000` on every connection; ChromaDB writes serialized behind the same lock.
 - [x] Reclaim holds the lock **per notebook** (< 300 s), not per run; stale-lock timeouts equalized across both pipelines and decided by PID liveness.
@@ -325,9 +337,9 @@ Three read surfaces must stop needing live notebooks, or Phase 3 breaks them: `s
 - [ ] A notebook with no captured artifact yields an explicit "not available", never a silent empty delivery.
 
 ### Pipeline
-- [ ] Daily run adds zero net notebooks.
+- [x] Daily run adds zero net notebooks.
 - [x] Weekly notebook/artifact steps removed; data steps preserved in daily; launchd agent retired.
-- [ ] Sources outside the 2-day window are expired explicitly.
+- [x] Sources outside the 2-day window are expired explicitly.
 - [x] Capacity guard: Telegram alert at ≥400 notebooks, hard-fail creation at ≥490.
 - [x] `nlm delete alias` called; dead aliases purged.
 - [x] `pytest tests/ -v` green.
