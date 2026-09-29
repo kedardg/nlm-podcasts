@@ -622,3 +622,61 @@ def test_expiry_moves_rows_rather_than_mutating_them(tmp_path, monkeypatch):
     assert [s["id"] for s in archived] == ["old"]
     assert archived[0]["status"] == "expired"
     assert archived[0]["expired_reason"]
+
+
+# ── Resume semantics ──────────────────────────────────────────────────────────
+
+def _reclaim_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "reclaim", PROJECT_ROOT / "src" / "pipeline" / "reclaim_notebooks.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("state,expect_reprocessed", [
+    ("pending", True),          # never started
+    ("capturing", True),        # crashed mid-capture; capture is idempotent and
+                                # promote sets any prior capture aside
+    ("captured", True),         # verified but not deleted; re-verify and delete
+    ("delete_pending", True),   # delete may or may not have landed; retry is safe
+    ("deleted", False),         # terminal
+    ("protected", False),       # terminal, and never selectable
+    ("needs_human", False),     # the gate refused; retrying just refuses again
+])
+def test_resume_decision_per_state(tmp_path, state, expect_reprocessed):
+    """Killing the process at any point must resume to a correct decision.
+
+    Resume is derived entirely from committed state plus the live account, so
+    there is no in-memory progress to lose.
+    """
+    reclaim = _reclaim_module()
+    conn = archive_db.open_db(tmp_path / "research.db")
+    with archive_db.write_txn(conn):
+        conn.execute(
+            "INSERT INTO notebooks (notebook_id,title,origin,state,captured_at,deleted_at)"
+            " VALUES (?,?,?,?,?,?)",
+            (NB, "Daily Feed — 2026-08-16", "daily", state,
+             "2026-09-29T00:00:00Z",
+             "2026-09-29T00:00:00Z" if state == "deleted" else None),
+        )
+    skipped = reclaim.skip_ids(conn)
+    assert (NB not in skipped) == expect_reprocessed
+
+
+def test_deleted_notebook_is_not_reprocessed_even_if_still_listed(tmp_path):
+    """Idempotency: a second full pass must be a no-op, not a second delete."""
+    reclaim = _reclaim_module()
+    conn = archive_db.open_db(tmp_path / "research.db")
+    with archive_db.write_txn(conn):
+        conn.execute(
+            "INSERT INTO notebooks (notebook_id,title,origin,state,captured_at,deleted_at)"
+            " VALUES (?,?,'daily','deleted',?,?)",
+            (NB, "T", "2026-09-29T00:00:00Z", "2026-09-29T00:00:00Z"))
+    auth = ReclaimAuthority(
+        {NB: FrozenNotebook(NB, "T", 5, "2026-08-16T00:00:00Z", "daily")}, set(), "d")
+    order = reclaim.build_order(
+        auth, {NB: {"id": NB, "updated_at": "2026-08-16T00:00:00Z"}},
+        reclaim.skip_ids(conn))
+    assert order == []
