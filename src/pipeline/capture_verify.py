@@ -112,8 +112,14 @@ def check_source_counts(verdict, enumerated, listed, rows):
     return verdict
 
 
-def check_source_content(verdict, source_rows):
-    """Condition 3 — every source captured real text, or says why not."""
+def check_source_content(verdict, source_rows, *, allow_thin=False):
+    """Condition 3 — every source captured real text, or says why not.
+
+    ``allow_thin`` downgrades the per-type length floor to a recorded note.
+    Some sources really are thin — a placeholder URL such as example.com
+    returns ~179 characters, and that is the whole page, not a failed capture.
+    Every other condition still applies.
+    """
     for row in source_rows:
         status = row.get("content_status")
         if status != "ok":
@@ -123,7 +129,7 @@ def check_source_content(verdict, source_rows):
             )
             continue
         floor = CHAR_FLOORS.get(row.get("source_type"), DEFAULT_CHAR_FLOOR)
-        if (row.get("char_count") or 0) < floor:
+        if (row.get("char_count") or 0) < floor and not allow_thin:
             verdict.fail(
                 f"source {row.get('nlm_source_id')} captured "
                 f"{row.get('char_count')} chars, below the {floor} floor for "

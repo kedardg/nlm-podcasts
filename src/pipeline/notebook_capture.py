@@ -238,7 +238,7 @@ def persist(conn, notebook_id, result, run_id, live_meta):
 
 
 def verify(conn, data_dir, notebook_id, authority, live_meta, result,
-           expected_device, seen_inodes=None):
+           expected_device, seen_inodes=None, allow_thin_sources=False):
     """Run the full gate. Only an ``ok`` verdict may be followed by a delete."""
     v = cv.Verdict()
     cv.check_authority(v, authority, notebook_id)
@@ -251,7 +251,7 @@ def verify(conn, data_dir, notebook_id, authority, live_meta, result,
         v, result.source_count_enumerated, result.source_count_listed,
         len(result.source_rows),
     )
-    cv.check_source_content(v, result.source_rows)
+    cv.check_source_content(v, result.source_rows, allow_thin=allow_thin_sources)
     cv.check_artifact_files(
         v, data_dir, notebook_id, result.artifact_rows,
         expected_device=expected_device, media_probe=client.ffprobe_duration,
@@ -291,10 +291,12 @@ def _log_deletion(data_dir, record):
 
 
 def delete_if_verified(conn, data_dir, notebook_id, authority, live_meta, result,
-                       expected_device, run_id, *, seen_inodes=None, dry_run=True):
+                       expected_device, run_id, *, seen_inodes=None, dry_run=True,
+                       allow_thin_sources=False):
     """The only path to an irreversible delete. Returns ``(deleted, verdict)``."""
     verdict = verify(conn, data_dir, notebook_id, authority, live_meta, result,
-                     expected_device, seen_inodes=seen_inodes)
+                     expected_device, seen_inodes=seen_inodes,
+                     allow_thin_sources=allow_thin_sources)
     if not verdict.ok:
         with archive_db.write_txn(conn):
             archive_db.set_state(

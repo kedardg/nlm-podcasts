@@ -533,3 +533,18 @@ def test_capture_discards_only_its_own_staging(tmp_path):
     import shutil
     shutil.rmtree(s)
     assert (final / "artifacts" / "good.md").exists()
+
+
+def test_thin_source_can_be_accepted_explicitly():
+    """A placeholder URL such as example.com returns ~179 characters, and that
+    is the whole page. Fail closed by default; let an operator opt in."""
+    rows = [{"nlm_source_id": "s1", "content_status": "ok",
+             "source_type": "web_page", "char_count": 179}]
+    assert not cv.check_source_content(cv.Verdict(), rows)
+    assert cv.check_source_content(cv.Verdict(), rows, allow_thin=True)
+
+
+def test_allow_thin_does_not_excuse_a_failed_capture():
+    rows = [{"nlm_source_id": "s1", "content_status": "error",
+             "source_type": "web_page", "char_count": 0}]
+    assert not cv.check_source_content(cv.Verdict(), rows, allow_thin=True)

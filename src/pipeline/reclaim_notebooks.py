@@ -117,6 +117,10 @@ def main():
     ap.add_argument("--target-free", type=int,
                     help="stop once this many notebook slots are free")
     ap.add_argument("--account-cap", type=int, default=500)
+    ap.add_argument("--allow-thin-sources", action="store_true",
+                    help="accept sources whose full text is shorter than the "
+                         "per-type floor (placeholder URLs, stub pages). Every "
+                         "other verification condition still applies.")
     ap.add_argument("--data-dir", default=str(DATA))
     args = ap.parse_args()
 
@@ -242,6 +246,7 @@ def main():
         was_deleted, verdict = capture_mod.delete_if_verified(
             conn, data_dir, notebook_id, authority, meta, result, device, run_id,
             seen_inodes=seen_inodes, dry_run=not args.execute,
+            allow_thin_sources=args.allow_thin_sources,
         )
         if was_deleted:
             deleted += 1
