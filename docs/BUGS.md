@@ -9,9 +9,61 @@ NLM authentication is a known limitation, not a bug — do not track it here.
 
 ## Open
 
+### BUG-012: 26 notebook aliases contain a literal `/`, producing bogus paths
+
+**Status**: open
+**Severity**: medium — artifacts written to directories that do not exist
+**Found**: 2026-09-29
+**Component**: `scripts/weekly_pipeline.sh:218` (alias construction), `:459-461` (path construction)
+
+**Description**: Aliases are built as
+`group_name.lower().replace(' ', '-').replace('&', 'and')[:30]`, which leaves
+the slash in `(Part 1/6)`. `data/notebooks.json` holds 26 such aliases, e.g.
+`general-(part-1/6)-2026-03-30`. `weekly_pipeline.sh` then builds
+`f'{project}/data/{slug}-podcast.mp3'` from that slug, writing into a directory
+that was never created. The fallout is visible in the working tree as stray
+`data/general-(part-1`, `data/machine-learning-(part-10` directories.
+
+**Mitigation in the archive path**: `src/lib/archive_paths.py` keys everything
+on `notebook_id` and never on an alias or title, and artifacts are renamed to
+`<artifact_id>.<ext>` immediately after download.
+
+**Fix**: sanitise the slash out of the alias, and stop deriving paths from
+aliases anywhere. Largely moot once weekly notebook creation is retired.
+
+### BUG-013: hard per-notebook source cap is unenforced on the split path
+
+**Status**: open
+**Severity**: low — no observed impact, the guard is simply unreachable
+**Found**: 2026-09-29
+**Component**: `src/data_triage.py:363-370`
+
+**Description**: The split path computes
+`num_splits = ceil(source_count / IDEAL_SPLIT_SIZE)` and then guards each chunk
+with `if end - start > MAX_SOURCES_PER_NOTEBOOK`. By construction
+`end - start <= IDEAL_SPLIT_SIZE` (15), which is always below
+`MAX_SOURCES_PER_NOTEBOOK` (50), so the branch never executes and the hard cap
+is enforced only on the non-split path at `:326`.
+
+
 ### BUG-001: `nlm download audio` always fails (TooManyRedirects)
 
-**Status**: open (upstream bug in notebooklm-mcp-cli)
+**Status**: **fixed upstream in notebooklm-mcp-cli 0.9.6** (verified 2026-09-29)
+
+**Verification**: `nlm download all <notebook> -d <dir> --json` downloaded an
+83 MB `.m4a` in one call, and `ffprobe` confirmed 2582 s at 257 kbps — a
+complete 43-minute podcast, no CDP and no Playwright involved. The redirect
+chain is now followed with domain-matched cookies inside the CLI.
+
+**Consequence**: the two workarounds below are no longer required.
+`src/nlm/client.py` uses `nlm download all` directly, and the archive capture
+path has no browser dependency. `src/nlm/nlm_download_audio.py` (CDP) and the
+Playwright audio path remain in the tree for the legacy pipeline branches but
+should be removed once a few daily runs confirm 0.9.6 in production.
+
+Historical detail follows.
+
+**Status (historical)**: open (upstream bug in notebooklm-mcp-cli)
 **Severity**: high — breaks all podcast downloads
 **Found**: 2026-02-27
 **Component**: `notebooklm-mcp-cli` → `notebooklm_tools/core/download.py`

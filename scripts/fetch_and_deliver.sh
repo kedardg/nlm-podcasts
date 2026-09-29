@@ -205,9 +205,10 @@ if [ "$ARTIFACT" = "podcast" ] || [ "$ARTIFACT" = "both" ]; then
   fi
 fi
 
-# --- Step 5: Share link ---
-
-SHARE_LINK=$($NLM share public "$NOTEBOOK_ID" 2>/dev/null | grep -oE 'https://[^ ]+' | head -1)
+# --- Step 5: retired — share links die when the notebook is reclaimed ---
+# Artifacts are delivered as attachments; a public link would stop resolving
+# as soon as the notebook's slot is released.
+SHARE_LINK=""
 
 # --- Output summary ---
 

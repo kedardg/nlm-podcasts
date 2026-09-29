@@ -249,6 +249,45 @@ You do **not** need to set `PROJECT_ROOT` in `.env` when running from within the
 | `news-digest` | Weekly news roundup from `news-queue.json`. Creates NLM notebook + deep-dive podcast. Requires 3+ articles. |
 | `chat-rag` | Notebook-routed RAG queries. ChromaDB identifies notebooks, NLM provides deep answers with citations. |
 
+## Notebook Lifecycle
+
+NotebookLM is a rendering service, not storage: the account is hard-capped at
+500 notebooks and has no versioning or backup. Notebooks are therefore
+disposable. Each run generates its artifacts, captures everything to disk and
+SQLite, proves the capture, and then deletes the notebook upstream.
+
+| Command | Purpose |
+|---------|---------|
+| `.venv/bin/python3 tools/build_allowlist.py` | Freeze the delete allowlist (one-shot). Writes `data/backfill-allowlist.json`, `data/backfill-excluded.json`, and the committed digest `config/backfill-allowlist.sha256`. |
+| `.venv/bin/python3 src/pipeline/reclaim_notebooks.py --plan` | Write the delete manifest. Destroys nothing. |
+| `... reclaim_notebooks.py --no-delete --limit N` | Capture and verify N notebooks without deleting. |
+| `... reclaim_notebooks.py --execute --limit N [--allow-thin-sources] [--allow-empty]` | Capture, verify and delete. Irreversible. Hard-capped at 25 per run. |
+| `... daily_capture_delete.py --capacity-check` | Account size; exit 1 means do not create. |
+| `... daily_capture_delete.py --notebook-id <id> --run-id <id>` | Daily Step 11: archive the run's notebook and release its slot. |
+
+**Two delete authorities, and neither falls back to the other.** Reclaim
+deletes only ids in the frozen, digest-verified allowlist — titles are never
+re-matched at delete time, so a personal notebook shaped like
+`Anything - Week of 2027-01-04` can never become deletable. The daily path
+deletes only a notebook the running process created.
+
+**The verification gate** (`src/pipeline/capture_verify.py`) demands positive
+proof, not absence of error. It refuses on: a notebook outside its authority,
+drift from the frozen snapshot, source counts that disagree or are vacuously
+zero, a source captured below its per-type length floor, a `download all` item
+reporting `success: false`, an artifact skipped for an unsupported type, an
+artifact in a non-terminal state, a zero-byte or size-mismatched file, an HTML
+error page saved as markdown, media with no playable duration, a path escaping
+the notebook directory, a hardlink into another notebook's capture, and a
+changed volume device id. Any failure routes the notebook to `needs_human` and
+leaves it alive.
+
+**Weekly notebook creation is retired.** It produced 399 of the 465 reclaimable
+notebooks — one category-week became 28 of them. `scripts/weekly_pipeline.sh`
+still runs steps 0-4 (newsletters, blogs, X, archiving, HF triage, content
+processing) and exits before the orchestrator; set `WEEKLY_NOTEBOOKS=1` to
+re-enable it. The daily pipeline is the only notebook-producing path.
+
 ## Data Files
 
 All persistent state lives in `data/`:
@@ -266,6 +305,10 @@ All persistent state lives in `data/`:
 | `nlm-operations-log.json` | Append-only provenance log for Playwright NLM runs. Tracks every URL, text source, and artifact per run with status, size, and timing. Created by `nlm_playwright.py`. |
 | `triage-results.json` | HF triage classification results. Each item has content_type (research/news/blog), confidence, method (domain_rule/title_heuristic/llm), reasoning. Created by `scripts/hf_triage.py`, consumed by `scripts/magazine_generator.py`. Incremental — cached results are reused across runs. |
 | `triage-plan.json` | Generated triage plan (notebook grouping, dedup report). Created by `data_triage.py --auto`, consumed by content-processor. After use, renamed to `triage-plan-consumed-YYYY-MM-DD.json` |
+| `research.db` | SQLite archive: `runs`, `notebooks`, `sources`, `artifacts`, `notebook_events`. The durable record of every captured notebook — what it held, where each artifact landed, and whether it was deleted upstream. Gitignored. |
+| `archive/notebooks/<notebook_id>/` | Captured artifacts (`capture/artifacts/<artifact_id>.<ext>`), extracted source text (`capture/sources/<source_id>.txt`), `manifest.json`, `studio-status.json`. Keyed by notebook id, never by title — four titles are duplicated across nine notebooks and 26 aliases contain a literal `/`. Gitignored. |
+| `backfill-allowlist.json` / `backfill-excluded.json` | The frozen delete allowlist and the protected set. Digest committed at `config/backfill-allowlist.sha256`; the protected ids are also committed at `docs/backfill-excluded-ids.json`, since `data/` is gitignored. |
+| `deleted-ids.log` | Append-only, fsynced, mode 0600, mirrored to `~/openclaw-research-backups/`. One self-contained JSON record per deletion, written *before* the delete call — the only trace that survives if the database write fails afterwards. |
 | `daily-feed/` | Directory of daily feed artifacts. Contains `YYYY-MM-DD.md` (deterministic briefing), `YYYY-MM-DD.pdf` (magazine PDF when `--magazine` used, else plain PDF), `YYYY-MM-DD-report.md` (NLM report — v3 markdown), `YYYY-MM-DD-report.pdf` (NLM report PDF), `YYYY-MM-DD-podcast-raw.mp4` (original audio/mp4 from NLM), `YYYY-MM-DD-podcast.mp3` (compressed 48kbps), `YYYY-MM-DD-sources.txt` (deterministic manifest of source URLs actually added to the notebook, written at source-add time; consumed by `enhance_report.py` to build the report's `## Source Links` from ground truth), `YYYY-MM-DD-deepdive.md`/`-deepdive.pdf` (Deep Dive Review — per-paper explainers), `YYYY-MM-DD-deepdive-plan.json` (one-way plan naming top ≤3 papers + source_ids + focus prompts for Phase 2 podcasts) |
 | `archive/` | Archived old news items. `news-YYYY-MM.json` files grouped by month. Created by `scripts/archive_old_news.py` (weekly pipeline Step 0). |
 
@@ -319,7 +362,7 @@ User: "chat what papers discuss attention?"
   +- Step 4: Merge responses -> answer with citations
 ```
 
-**Scoring**: Results are filtered by `MIN_NOTEBOOK_SCORE = 0.6` (removes irrelevant matches), then ranked by composite score (70% best match quality + 30% normalized hit volume).
+**Scoring**: Results are filtered by `MIN_NOTEBOOK_SCORE` (`src/rag/query.py:36`, currently `0.3`), then ranked by composite score (70% best match quality + 30% normalized hit volume).
 
 ### What Gets Indexed
 
@@ -684,7 +727,7 @@ Pre-processing step in the weekly pipeline that handles deduplication, volume an
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| `nlm` (notebooklm-mcp-cli) | 0.3.15 | NotebookLM CLI for notebooks, sources, audio, reports |
+| `nlm` (notebooklm-mcp-cli) | 0.9.6 | NotebookLM CLI for notebooks, sources, audio, reports. `download all` fetches every artifact type including audio (BUG-001 fixed upstream). |
 | `ffmpeg` | 8.0.1 | Podcast audio compression (48kbps mono for Telegram) |
 | `pandoc` | 3.9 | Report format conversion |
 | `pango` | — | Font rendering (required by WeasyPrint) |

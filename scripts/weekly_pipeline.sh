@@ -155,6 +155,26 @@ else
 fi
 echo ""
 
+# ── Steps 5-7 retired: weekly no longer creates notebooks ─────
+# Weekly notebook creation is what exhausted the 500-notebook account. It split
+# a single category-week into dozens of notebooks — "Machine Learning - Week of
+# 2026-08-15" alone became 28 of them across 441 sources — and none was ever
+# deleted. The daily pipeline is now the only notebook-producing path, at about
+# one a day, and it releases its slot in Step 11.
+#
+# Everything above this line is data collection (newsletters, blogs, X,
+# archiving, HF triage, content processing) and still runs on the weekly
+# schedule; it feeds the daily feed and the magazine. Set WEEKLY_NOTEBOOKS=1 to
+# re-enable the orchestrator, which requires free capacity in the account.
+if [[ "${WEEKLY_NOTEBOOKS:-0}" != "1" ]]; then
+    log "Steps 5-7: skipped (weekly notebook creation is retired)"
+    log "  Data collection steps 0-4 completed; daily pipeline owns notebooks."
+    echo ""
+    PIPELINE_END=$(date +%s)
+    log "=== Weekly data collection complete ($((PIPELINE_END - PIPELINE_START))s) ==="
+    exit 0
+fi
+
 # ── Step 5: NotebookLM Orchestrator ───────────────────────────
 log "Step 5: NotebookLM Orchestrator"
 if $SKIP_NLM || $DRY_RUN; then

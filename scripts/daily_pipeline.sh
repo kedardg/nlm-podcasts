@@ -657,19 +657,11 @@ except Exception:
 
 fi
 
-# ── Step 7: Get share link ─────────────────────────────────────
+# ── Step 7: retired — share links do not survive Step 11 ──────
+# A public notebook link stops resolving the moment the notebook is deleted,
+# so emitting one into a Telegram message that stays in the user's history
+# just manufactures a dead link. The PDF and MP3 are attached directly.
 SHARE_LINK=""
-if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
-    log "Step 7: Get share link"
-    SHARE_OUT=$($NLM share public "$NOTEBOOK_ID" 2>&1)
-    if [[ $? -eq 0 ]]; then
-        SHARE_LINK=$(echo "$SHARE_OUT" | grep -oE 'https?://[^ ]+' | head -1)
-        step_ok "share-link"
-    else
-        step_fail "share-link"
-    fi
-    echo ""
-fi
 
 # ── Step 8: Deliver via Telegram ───────────────────────────────
 log "Step 8: Deliver via Telegram"
