@@ -37,3 +37,8 @@ Thumbs.db
 *~
 .project
 .settings/
+
+# Notebook archive: captured artifacts are large binaries, and the allowlist
+# is regenerated per-account. The protected-id list is committed under docs/.
+data/archive/
+data/research.db*

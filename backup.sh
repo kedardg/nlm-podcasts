@@ -11,7 +11,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_DIR="${1:-$SCRIPT_DIR/backups/$TIMESTAMP}"
+# Default off $SCRIPT_DIR: the project lives on an external volume, and a
+# backup on the same device does not survive that device going away.
+DEFAULT_BACKUP_ROOT="${BACKUP_ROOT:-$HOME/openclaw-research-backups}"
+BACKUP_DIR="${1:-$DEFAULT_BACKUP_ROOT/$TIMESTAMP}"
 
 echo "=== OpenClaw Research Backup ==="
 echo "Timestamp: $TIMESTAMP"
@@ -23,7 +26,9 @@ mkdir -p "$BACKUP_DIR"
 # ── 1. Research data files ──
 echo "[1/5] Backing up research data..."
 mkdir -p "$BACKUP_DIR/data"
-for f in sources.json accounts.json categories.json notebooks.json processing-log.json newsletters.json news-queue.json; do
+for f in sources.json accounts.json categories.json notebooks.json processing-log.json \
+         newsletters.json news-queue.json feeds.json triage-results.json \
+         backfill-allowlist.json backfill-excluded.json; do
   src="$SCRIPT_DIR/data/$f"
   if [ -f "$src" ]; then
     cp "$src" "$BACKUP_DIR/data/$f"
@@ -31,10 +36,38 @@ for f in sources.json accounts.json categories.json notebooks.json processing-lo
   fi
 done
 
+# The notebook archive is the system of record once notebooks are deleted
+# upstream — there is no other copy of these artifacts anywhere.
+if [ -d "$SCRIPT_DIR/data/archive" ]; then
+  cp -R "$SCRIPT_DIR/data/archive" "$BACKUP_DIR/data/archive"
+  echo "  + data/archive/ ($(du -sh "$SCRIPT_DIR/data/archive" | cut -f1))"
+fi
+if [ -f "$SCRIPT_DIR/data/deleted-ids.log" ]; then
+  cp "$SCRIPT_DIR/data/deleted-ids.log" "$BACKUP_DIR/data/deleted-ids.log"
+  echo "  + data/deleted-ids.log"
+fi
+
+# SQLite must be copied through the engine: a plain cp of a live WAL database
+# can capture a torn page set.
+if [ -f "$SCRIPT_DIR/data/research.db" ]; then
+  if sqlite3 "$SCRIPT_DIR/data/research.db" ".backup '$BACKUP_DIR/data/research.db'"; then
+    echo "  + data/research.db (consistent .backup)"
+  else
+    echo "  ! data/research.db backup FAILED" >&2
+    exit 1
+  fi
+fi
+
 # ── 2. RAG vector store ──
 echo "[2/5] Backing up RAG store..."
 if [ -d "$SCRIPT_DIR/rag/chroma_db" ]; then
-  cp -r "$SCRIPT_DIR/rag/chroma_db" "$BACKUP_DIR/chroma_db"
+  mkdir -p "$BACKUP_DIR/chroma_db"
+  cp -r "$SCRIPT_DIR/rag/chroma_db/." "$BACKUP_DIR/chroma_db/"
+  if [ -f "$SCRIPT_DIR/rag/chroma_db/chroma.sqlite3" ]; then
+    sqlite3 "$SCRIPT_DIR/rag/chroma_db/chroma.sqlite3" \
+      ".backup '$BACKUP_DIR/chroma_db/chroma.sqlite3'" || {
+      echo "  ! chroma.sqlite3 backup FAILED" >&2; exit 1; }
+  fi
   echo "  + chroma_db/"
 else
   echo "  (no chroma_db yet — skipping)"
@@ -104,7 +137,7 @@ if [ -f "$SCRIPT_DIR/pyproject.toml" ]; then
 fi
 if [ -d "$SCRIPT_DIR/scripts" ]; then
   mkdir -p "$BACKUP_DIR/scripts"
-  cp $SCRIPT_DIR/src/pipeline/*.py" "$SCRIPT_DIR/src/nlm/*.py" "$SCRIPT_DIR/src/rag/*.py "$BACKUP_DIR/scripts/" 2>/dev/null
+  cp "$SCRIPT_DIR"/src/pipeline/*.py "$SCRIPT_DIR"/src/nlm/*.py "$SCRIPT_DIR"/src/rag/*.py "$BACKUP_DIR/scripts/"
   echo "  + scripts/ (pipeline helper scripts)"
 fi
 if [ -d "$SCRIPT_DIR/templates" ]; then
