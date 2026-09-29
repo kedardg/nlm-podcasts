@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "044"
 tags: [code-review, data-integrity, operations]
@@ -33,8 +33,18 @@ Shipped in `src/pipeline/notebook_capture.py::_log_deletion`:
 - Mirrored to `~/openclaw-research-backups/`, off the external volume.
 - `capture_completeness` is also a column on `notebooks`.
 
-Still outstanding: **nothing reads the log**. The startup reconciliation pass
-that compares it against the database and reports divergence is not written.
+Reconciliation shipped as `src/pipeline/archive_reconcile.py`: compares the
+log, the database and the live account, and names every divergence. `--repair`
+corrects a row only on three independent pieces of evidence — logged before the
+delete, confirmed gone upstream, and a capture still on disk.
+
+It earned its place immediately. Four notebooks showed as `needs_human` with a
+misleading "could not retrieve studio status" error. The `notebook_events` log
+showed two reclaim processes had raced (before the pipeline lock landed): one
+captured, verified and deleted each notebook; the other, having lost the race,
+failed its download *because the notebook was already gone* and overwrote the
+state. The captures were intact on disk (136 MB, 95 MB, 41 MB, 41 MB) and all
+four were confirmed deleted upstream, so the rows were repaired to `deleted`.
 
 ## Acceptance Criteria
 
