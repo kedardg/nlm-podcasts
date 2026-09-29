@@ -489,3 +489,47 @@ def test_frozen_drift_blocks_deletion():
                          ("updated_at", "2026-09-29T00:00:00Z")]:
         live = dict(live_same, **{field: value})
         assert not cv.check_frozen_drift(cv.Verdict(), auth, NB, live), field
+
+
+# ── Capture promotion ─────────────────────────────────────────────────────────
+
+def test_promote_preserves_a_previous_capture(tmp_path):
+    """A re-capture must never destroy the capture already on disk — the
+    archive is the only copy those artifacts have."""
+    from pipeline import notebook_capture as nc
+
+    run_a, run_b = "reclaim_A", "reclaim_B"
+    s1 = staging_dir(tmp_path, NB, run_a)
+    (s1 / "artifacts").mkdir(parents=True)
+    (s1 / "artifacts" / "first.md").write_text("original capture")
+    nc.promote(tmp_path, NB, run_a)
+
+    final = notebook_dir(tmp_path, NB) / "capture"
+    assert (final / "artifacts" / "first.md").read_text() == "original capture"
+
+    s2 = staging_dir(tmp_path, NB, run_b)
+    (s2 / "artifacts").mkdir(parents=True)
+    (s2 / "artifacts" / "second.md").write_text("new capture")
+    nc.promote(tmp_path, NB, run_b)
+
+    assert (final / "artifacts" / "second.md").read_text() == "new capture"
+    superseded = list(notebook_dir(tmp_path, NB).glob(".superseded-*"))
+    assert superseded, "the earlier capture was destroyed"
+    assert (superseded[0] / "artifacts" / "first.md").read_text() == "original capture"
+
+
+def test_capture_discards_only_its_own_staging(tmp_path):
+    """Restarting a notebook clears this run's partials, not a good capture."""
+    from pipeline import notebook_capture as nc
+
+    final = notebook_dir(tmp_path, NB) / "capture"
+    (final / "artifacts").mkdir(parents=True)
+    (final / "artifacts" / "good.md").write_text("good")
+
+    s = staging_dir(tmp_path, NB, "reclaim_C")
+    (s / "artifacts").mkdir(parents=True)
+    (s / "artifacts" / "partial.md").write_text("half a file")
+
+    import shutil
+    shutil.rmtree(s)
+    assert (final / "artifacts" / "good.md").exists()
