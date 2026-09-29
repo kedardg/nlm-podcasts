@@ -137,6 +137,15 @@ $PYTHON "$PROJECT_ROOT/src/blog_monitor.py" 2>&1 && { step_ok "blog-monitor"; st
 echo ""
 
 # ── Step 1: Generate daily feed HTML ────────────────────────────
+log "Step 0.7: Expire sources outside the collection window"
+# Weekly used to drain everything older than the daily window into its own
+# notebooks. With weekly notebook creation retired, anything that falls out of
+# the two-day window would otherwise accumulate in sources.json forever. Rows
+# are moved to data/archive/, not deleted.
+$PYTHON "$PROJECT_ROOT/src/pipeline/expire_sources.py" --days 2 2>&1 && \
+    step_ok "expire-sources" || step_fail "expire-sources"
+echo ""
+
 log "Step 1: Generate daily feed (markdown + HTML)"
 DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/src/daily_feed_generator.py" \
     --pdf-only --date "$DATE" 2>&1

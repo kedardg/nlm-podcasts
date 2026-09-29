@@ -588,3 +588,37 @@ def test_needs_human_is_not_retried_automatically(tmp_path):
     assert NB in reclaim.skip_ids(conn)
     assert NB not in reclaim.skip_ids(conn, retry_needs_human=True)
     assert NB2 in reclaim.skip_ids(conn, retry_needs_human=True)
+
+
+# ── Source expiry ─────────────────────────────────────────────────────────────
+
+def test_expiry_moves_rows_rather_than_mutating_them(tmp_path, monkeypatch):
+    """data/ is gitignored and unbacked, so an in-place status flip would be the
+    only record and a bad run would be unrecoverable."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "expire", PROJECT_ROOT / "src" / "pipeline" / "expire_sources.py")
+    expire = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(expire)
+
+    from lib.file_utils import load_json, save_json
+    data = tmp_path
+    save_json(data / "sources.json", {"sources": [
+        {"id": "old", "status": "queued", "added_at": "2020-01-01T00:00:00Z"},
+        {"id": "fresh", "status": "queued", "added_at": "2099-01-01T00:00:00Z"},
+        {"id": "linked", "status": "processing", "added_at": "2020-01-01T00:00:00Z",
+         "notebook_id": NB},
+        {"id": "done", "status": "completed", "added_at": "2020-01-01T00:00:00Z"},
+    ]})
+    monkeypatch.setattr(sys, "argv", ["expire", "--data-dir", str(data), "--days", "2"])
+    expire.main()
+
+    live = {s["id"] for s in load_json(data / "sources.json")["sources"]}
+    assert live == {"fresh", "linked", "done"}, "wrong rows expired"
+
+    archived = load_json(
+        data / "archive" / f"sources-expired-{__import__('datetime').datetime.now().strftime('%Y-%m')}.json",
+        default={"sources": []})["sources"]
+    assert [s["id"] for s in archived] == ["old"]
+    assert archived[0]["status"] == "expired"
+    assert archived[0]["expired_reason"]
