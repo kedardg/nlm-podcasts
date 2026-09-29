@@ -92,12 +92,31 @@ def check_frozen_drift(verdict, authority, notebook_id, live):
     return verdict
 
 
-def check_source_counts(verdict, enumerated, listed, rows):
+def check_source_counts(verdict, enumerated, listed, rows, *,
+                        frozen_count=None, allow_empty=False):
     """Condition 2 — three counts must agree, and none may be zero.
 
     A transient empty `nlm source list` would otherwise make 0 == 0 == 0 pass
     and delete a 16-source notebook having captured nothing.
+
+    The exception is a notebook that is *provably* empty: some runs created a
+    notebook and died before adding any sources. ``frozen_count`` comes from
+    the allowlist snapshot — a separate call at a separate time — so agreement
+    between it and today's zero is independent evidence rather than the same
+    failed call observed three times. Even then it takes ``allow_empty``, so
+    destroying a notebook that holds nothing is always a deliberate choice.
     """
+    provably_empty = (
+        not enumerated and not listed and not rows and frozen_count == 0
+    )
+    if provably_empty:
+        if allow_empty:
+            return verdict
+        verdict.fail(
+            "notebook holds no sources (confirmed against the frozen snapshot); "
+            "pass --allow-empty to reclaim it"
+        )
+        return verdict
     if not enumerated or not listed or not rows:
         verdict.fail(
             f"source counts must all be non-zero (enumerated={enumerated}, "

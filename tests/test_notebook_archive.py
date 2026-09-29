@@ -548,3 +548,19 @@ def test_allow_thin_does_not_excuse_a_failed_capture():
     rows = [{"nlm_source_id": "s1", "content_status": "error",
              "source_type": "web_page", "char_count": 0}]
     assert not cv.check_source_content(cv.Verdict(), rows, allow_thin=True)
+
+
+def test_provably_empty_notebook_needs_an_explicit_flag():
+    """Some runs created a notebook and died before adding sources. Agreement
+    between today's zero and the frozen snapshot's zero is independent
+    evidence — but reclaiming it is still a deliberate choice."""
+    assert not cv.check_source_counts(cv.Verdict(), 0, 0, 0, frozen_count=0)
+    assert cv.check_source_counts(cv.Verdict(), 0, 0, 0, frozen_count=0,
+                                  allow_empty=True)
+
+
+def test_transient_empty_list_is_refused_even_with_allow_empty():
+    """The frozen snapshot says 16 sources; today's call says none. That is a
+    failed call, not an empty notebook."""
+    assert not cv.check_source_counts(cv.Verdict(), 0, 0, 0, frozen_count=16,
+                                      allow_empty=True)

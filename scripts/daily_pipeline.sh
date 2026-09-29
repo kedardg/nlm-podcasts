@@ -297,6 +297,17 @@ fi
 if ! $SKIP_NLM; then
     log "Step 2: Create NLM notebook"
 
+    # Capacity guard. The account is hard-capped at 500 notebooks; creating
+    # blindly into a full account is what took this pipeline down for months.
+    if ! $PYTHON "$PROJECT_ROOT/src/pipeline/daily_capture_delete.py" \
+            --capacity-check >/dev/null 2>&1; then
+        log "  ERROR: notebook capacity exhausted — run reclaim_notebooks.py"
+        alert "Daily pipeline: NotebookLM capacity exhausted; run reclaim_notebooks.py"
+        SKIP_NLM=true
+    fi
+fi
+
+if ! $SKIP_NLM; then
     # Idempotency: check if notebook already exists for this date
     EXISTING_NB=$($NLM alias get "daily-$DATE" 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
     if [[ -n "$EXISTING_NB" ]]; then
@@ -765,6 +776,21 @@ if [[ -n "$NOTEBOOK_ID" ]] && [[ -f "$REPORT_MD" ]] && [[ -f "$PROJECT_ROOT/src/
     $PYTHON "$PROJECT_ROOT/src/pipeline/index_notebook.py" \
         --notebook-id "$NOTEBOOK_ID" --report-file "$REPORT_MD" 2>&1 && \
         step_ok "rag-index" || step_fail "rag-index"
+    echo ""
+fi
+
+# ── Step 11: Capture the notebook to the archive, then delete it ──
+# Everything the notebook was for has already been generated, downloaded and
+# delivered by this point. Capturing and deleting keeps the account footprint
+# flat instead of growing by one notebook a day until create fails.
+if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
+    log "Step 11: Archive notebook and release the slot"
+    $PYTHON "$PROJECT_ROOT/src/pipeline/daily_capture_delete.py" \
+        --notebook-id "$NOTEBOOK_ID" \
+        --run-id "daily_$DATE" \
+        --alias "daily-$DATE" \
+        --title "Daily Feed — $DATE" 2>&1 && \
+        step_ok "notebook-archive" || step_fail "notebook-archive"
     echo ""
 fi
 

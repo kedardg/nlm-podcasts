@@ -121,6 +121,9 @@ def main():
                     help="accept sources whose full text is shorter than the "
                          "per-type floor (placeholder URLs, stub pages). Every "
                          "other verification condition still applies.")
+    ap.add_argument("--allow-empty", action="store_true",
+                    help="reclaim notebooks that hold no sources at all, when "
+                         "the frozen snapshot agrees they never did.")
     ap.add_argument("--data-dir", default=str(DATA))
     args = ap.parse_args()
 
@@ -247,6 +250,7 @@ def main():
             conn, data_dir, notebook_id, authority, meta, result, device, run_id,
             seen_inodes=seen_inodes, dry_run=not args.execute,
             allow_thin_sources=args.allow_thin_sources,
+            allow_empty=args.allow_empty,
         )
         if was_deleted:
             deleted += 1
