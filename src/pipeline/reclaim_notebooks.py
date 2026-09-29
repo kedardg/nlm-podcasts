@@ -27,7 +27,9 @@ Usage:
 """
 
 import argparse
+import atexit
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -51,6 +53,54 @@ AUTH_SCRIPT = PROJECT_ROOT / "scripts" / "nlm_ensure_auth.sh"
 # Google rotates session cookies roughly every 10 minutes, so a long run
 # re-checks well inside that window rather than waiting for a failure.
 AUTH_RECHECK_EVERY = 15
+
+
+def _acquire_lock(lock_path):
+    """Take the shared pipeline lock, honouring a live holder's PID.
+
+    Mirrors scripts/pipeline_lock.sh: the lock file holds the owner's PID, and
+    a stale one is only reclaimed when that process is genuinely gone.
+    """
+    lock_path = Path(lock_path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    if lock_path.is_dir():
+        try:
+            lock_path.rmdir()
+        except OSError:
+            return None
+    try:
+        fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+    except FileExistsError:
+        try:
+            holder = int(lock_path.read_text().strip() or 0)
+        except (ValueError, OSError):
+            holder = 0
+        if holder:
+            try:
+                os.kill(holder, 0)
+                return None            # holder is alive
+            except (ProcessLookupError, PermissionError) as exc:
+                if isinstance(exc, PermissionError):
+                    return None        # alive, owned by someone else
+        log(f"reclaiming lock from dead PID {holder or 'unknown'}")
+        try:
+            lock_path.unlink()
+            fd = os.open(str(lock_path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except OSError:
+            return None
+    os.write(fd, str(os.getpid()).encode())
+    os.close(fd)
+    atexit.register(_release_lock, lock_path)
+    return lock_path
+
+
+def _release_lock(lock_path):
+    """Only ever release a lock this process owns."""
+    try:
+        if Path(lock_path).read_text().strip() == str(os.getpid()):
+            Path(lock_path).unlink()
+    except OSError:
+        pass
 
 
 def log(msg):
@@ -96,9 +146,19 @@ def build_order(authority, live_by_id, done_ids):
     )
 
 
-def completed_ids(conn):
+def skip_ids(conn, retry_needs_human=False):
+    """Notebooks this run should not touch.
+
+    'needs_human' is terminal by design: the gate refused, and re-running
+    re-downloads every artifact only to refuse again. Left in the automatic
+    rotation it is pure cost — and it grows, so each batch gets slower.
+    """
+    states = ["deleted", "protected"]
+    if not retry_needs_human:
+        states.append("needs_human")
+    placeholders = ",".join("?" * len(states))
     rows = conn.execute(
-        "SELECT notebook_id FROM notebooks WHERE state IN ('deleted','protected')"
+        f"SELECT notebook_id FROM notebooks WHERE state IN ({placeholders})", states
     ).fetchall()
     return {r["notebook_id"] for r in rows}
 
@@ -121,6 +181,9 @@ def main():
                     help="accept sources whose full text is shorter than the "
                          "per-type floor (placeholder URLs, stub pages). Every "
                          "other verification condition still applies.")
+    ap.add_argument("--retry-needs-human", action="store_true",
+                    help="re-attempt notebooks the gate previously refused "
+                         "(after fixing the cause, or with an override flag)")
     ap.add_argument("--allow-empty", action="store_true",
                     help="reclaim notebooks that hold no sources at all, when "
                          "the frozen snapshot agrees they never did.")
@@ -132,6 +195,15 @@ def main():
 
     data_dir = Path(args.data_dir)
     run_id = f"reclaim_{now_iso().replace(':', '').replace('-', '')}"
+
+    # Share the pipeline lock: reclaim deletes notebooks the daily run may be
+    # creating, and two reclaims could select the same notebook. --plan reads
+    # only, so it does not contend.
+    lock = None
+    if not args.plan:
+        lock = _acquire_lock(data_dir / ".pipeline.lock")
+        if lock is None:
+            sys.exit("another pipeline or reclaim holds the lock; try later")
 
     if not ensure_auth():
         sys.exit("NLM auth could not be established; refusing to start")
@@ -172,7 +244,8 @@ def main():
                     (nid, meta.get("title") or ""),
                 )
 
-    order = build_order(authority, live_by_id, completed_ids(conn))
+    order = build_order(authority, live_by_id,
+                        skip_ids(conn, args.retry_needs_human))
     log(f"{len(order)} notebook(s) pending")
 
     if args.plan:
