@@ -308,6 +308,18 @@ if ! $SKIP_NLM; then
 fi
 
 if ! $SKIP_NLM; then
+    # Idempotency, first against the archive. The alias check below cannot be
+    # the only guard any more: Step 11 deletes the alias along with the
+    # notebook, so a rerun would sail past it and build a second notebook —
+    # and regenerate the whole studio set — for a date already finished.
+    if $PYTHON "$PROJECT_ROOT/src/pipeline/daily_capture_delete.py" \
+            --already-done --run-id "daily_$DATE" 2>/dev/null; then
+        log "  Already archived for $DATE; artifacts are on disk"
+        SKIP_NLM=true
+    fi
+fi
+
+if ! $SKIP_NLM; then
     # Idempotency: check if notebook already exists for this date
     EXISTING_NB=$($NLM alias get "daily-$DATE" 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
     if [[ -n "$EXISTING_NB" ]]; then

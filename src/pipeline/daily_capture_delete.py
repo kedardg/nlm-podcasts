@@ -71,6 +71,10 @@ def main():
     ap.add_argument("--allow-thin-sources", action="store_true")
     ap.add_argument("--capacity-check", action="store_true",
                     help="report account size and exit; 1 means do not create")
+    ap.add_argument("--already-done", action="store_true",
+                    help="exit 0 if --run-id was already captured or deleted. "
+                         "Idempotency must not key on the NLM alias, because "
+                         "this step deletes it.")
     args = ap.parse_args()
 
     if args.capacity_check:
@@ -78,6 +82,18 @@ def main():
         if count is not None:
             print(count)
         sys.exit(0 if ok else 1)
+
+    if args.already_done:
+        conn = archive_db.open_db(Path(args.data_dir) / "research.db")
+        row = conn.execute(
+            "SELECT notebook_id, state FROM notebooks"
+            " WHERE run_id=? AND state IN ('captured','delete_pending','deleted')"
+            " LIMIT 1", (args.run_id,),
+        ).fetchone()
+        if row:
+            log(f"{args.run_id} already {row['state']} ({row['notebook_id']})")
+            sys.exit(0)
+        sys.exit(1)
 
     if not args.notebook_id:
         ap.error("--notebook-id is required unless --capacity-check")

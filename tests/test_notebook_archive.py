@@ -564,3 +564,27 @@ def test_transient_empty_list_is_refused_even_with_allow_empty():
     failed call, not an empty notebook."""
     assert not cv.check_source_counts(cv.Verdict(), 0, 0, 0, frozen_count=16,
                                       allow_empty=True)
+
+
+def test_needs_human_is_not_retried_automatically(tmp_path):
+    """The gate refused; re-running re-downloads every artifact only to refuse
+    again, and the set grows so each batch gets slower."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "reclaim", PROJECT_ROOT / "src" / "pipeline" / "reclaim_notebooks.py")
+    reclaim = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reclaim)
+
+    conn = archive_db.open_db(tmp_path / "research.db")
+    with archive_db.write_txn(conn):
+        for nid, state in ((NB, "needs_human"), (NB2, "deleted")):
+            conn.execute(
+                "INSERT INTO notebooks (notebook_id,title,origin,state,deleted_at,"
+                "captured_at) VALUES (?,?,?,?,?,?)",
+                (nid, "T", "daily", state,
+                 "2026-09-29T00:00:00Z" if state == "deleted" else None,
+                 "2026-09-29T00:00:00Z"))
+
+    assert NB in reclaim.skip_ids(conn)
+    assert NB not in reclaim.skip_ids(conn, retry_needs_human=True)
+    assert NB2 in reclaim.skip_ids(conn, retry_needs_human=True)
