@@ -519,9 +519,13 @@ nlm notebook query research "Summarize the key findings"
 ```bash
 nlm audio create research --format deep_dive --length default --confirm
 nlm studio status research          # poll until generation completes
-# NOTE: `nlm download audio` is broken (TooManyRedirects). Use the workaround:
-.venv/bin/python3 scripts/nlm_download_audio.py research --output podcast.mp4
+nlm download all research -d ./out --json   # fetches audio too (see below)
 ```
+
+`nlm download all` downloads every completed artifact, audio included, and
+reports each one's path in its JSON. Prefer it over the per-type commands: it
+is one call, and its `items[].success` field is what tells you a download
+actually finished rather than leaving a partial file behind.
 Audio formats: `deep_dive`, `brief`, `critique`, `debate`
 Lengths: `short`, `default`, `long`
 
@@ -809,12 +813,11 @@ When registered via `nlm setup add claude-code`, Claude Code can call these tool
 - If ffmpeg fails, the raw file still exists as `*-podcast-raw.mp4`; share via notebook link instead
 - NLM outputs audio as `audio/mp4` format — raw files are `.mp4`, ffmpeg converts to `.mp3`
 
-### `nlm download audio` fails (TooManyRedirects)
-- **Known bug**: `nlm download audio` always fails because httpx strips cookies on cross-domain redirects through Google's CDN chain (`lh3.googleusercontent.com` -> `lh3.google.com` -> `googlevideo.com`).
-- **Fix**: Use `scripts/nlm_download_audio.py` instead, which extracts cookies from Chrome via CDP and manually follows the redirect chain with domain-aware cookies.
-- **Both pipelines** (`daily_pipeline.sh`, `weekly_pipeline.sh`) already use this workaround.
-- **Requires**: Chrome running with `--remote-debugging-port` (any port in 9222-9231).
-- `nlm download report` works fine (text, not CDN-streamed).
+### `nlm download audio` fails (TooManyRedirects) — FIXED upstream in 0.9.6
+- **Was**: httpx stripped cookies across Google's CDN redirect chain, so audio downloads always failed (BUG-001).
+- **Now**: `nlm download all <notebook> -d <dir> --json` fetches audio directly. Verified 2026-09-29: an 83 MB `.m4a`, `ffprobe` 2582 s @ 257 kbps, no Chrome and no Playwright involved.
+- `src/nlm/client.py` and the archive capture path use `download all`. The daily pipeline no longer needs the CDP workaround.
+- `src/nlm/nlm_download_audio.py` (CDP) and the Playwright audio path remain for legacy branches; remove them once a few daily runs confirm 0.9.6 in production.
 
 ### `nlm download` syntax (for report/other non-audio artifacts)
 - **Correct syntax**: `nlm download report <notebook-id-or-alias> --output /path/to/output.md`
