@@ -193,7 +193,7 @@ else
         else
             # Process each group: create notebook, add sources, generate artifacts
             $PYTHON -c "
-import json, subprocess, sys, os, time
+import json, subprocess, sys, os, time, re
 
 manifest = json.load(open('$MANIFEST'))
 sources_data = json.load(open('$PROJECT_ROOT/data/sources.json'))
@@ -204,6 +204,7 @@ date = '$DATE'
 
 src_map = {s['id']: s for s in sources_data.get('sources', [])}
 created = []
+used_slugs = {}
 
 for group_name, info in manifest.get('groups', {}).items():
     # Include 'processing' too — content_processor marks sources as 'processing' after grouping
@@ -215,7 +216,13 @@ for group_name, info in manifest.get('groups', {}).items():
     info['source_ids'] = queued_ids
     info['source_count'] = len(queued_ids)
     print(f'\\n--- {group_name} ({info[\"source_count\"]} sources) ---')
-    slug = group_name.lower().replace(' ', '-').replace('&', 'and')[:30]
+    # Sanitize: split names like 'NLP (Part 1/20)' otherwise leave '/' and '('
+    # in the slug, corrupting file paths. Dedup: 30-char truncation collides
+    # between parts, silently overwriting each other's files.
+    slug = re.sub(r'[^a-z0-9._-]+', '-', group_name.lower().replace('&', 'and')).strip('-')[:30]
+    used_slugs[slug] = used_slugs.get(slug, 0) + 1
+    if used_slugs[slug] > 1:
+        slug = f'{slug[:26]}-c{used_slugs[slug]}'
     alias = f'{slug}-{date}'
 
     # Create notebook
@@ -290,7 +297,8 @@ for group_name, info in manifest.get('groups', {}).items():
     if focus:
         podcast_cmd.extend(['--focus', focus])
     r = subprocess.run(podcast_cmd, capture_output=True, text=True, timeout=30)
-    print(f'  Podcast: {\"requested\" if r.returncode == 0 else \"FAILED\"}')
+    podcast_ok = r.returncode == 0
+    print(f'  Podcast: {\"requested\" if podcast_ok else \"FAILED\"}')
 
     # Generate report
     report_script = f'{project}/scripts/nlm_create_report.sh'
@@ -312,7 +320,7 @@ for group_name, info in manifest.get('groups', {}).items():
         'created_at': '${DATE}T00:00:00Z',
         'source_count': added,
         'source_ids': info.get('source_ids', []),
-        'has_podcast': True, 'has_report': True,
+        'has_podcast': podcast_ok, 'has_report': True,
         'status': 'generating', 'run_id': f'weekly_{date}',
     })
 
@@ -459,13 +467,28 @@ for nb in recent:
     slug = nb.get('alias', nb['id'][:8])
     print(f'\\nDelivering: {nb[\"category_name\"]} ({slug})')
 
-    # Download podcast (uses CDP redirect-following workaround)
+    # Download podcast: nlm CLI first (works on 0.9.6+; retry while the media
+    # URL propagates), then the CDP redirect-following workaround as fallback.
+    # Skip entirely if podcast creation failed (e.g. NLM audio quota) — retrying
+    # a download that can never exist wasted ~6 min per notebook.
     podcast_raw = f'{project}/data/{slug}-podcast-raw.mp4'
     podcast = f'{project}/data/{slug}-podcast.mp3'
-    r = subprocess.run([f'{project}/.venv/bin/python3', f'{project}/src/nlm/nlm_download_audio.py',
-                       nb['id'], '--output', podcast_raw],
-                      capture_output=True, text=True, timeout=600)
-    if r.returncode == 0 and os.path.exists(podcast_raw) and os.path.getsize(podcast_raw) > 0:
+    if not nb.get('has_podcast', True):
+        print(f'  Podcast: skipped (creation failed)')
+    else:
+        for attempt in range(4):
+            r = subprocess.run([nlm, 'download', 'audio', nb['id'], '--output', podcast_raw],
+                              capture_output=True, text=True, timeout=600)
+            if os.path.exists(podcast_raw) and os.path.getsize(podcast_raw) > 0:
+                break
+            if attempt < 3:
+                print(f'  Podcast: download not ready — retrying in 120s...')
+                time.sleep(120)
+        if not (os.path.exists(podcast_raw) and os.path.getsize(podcast_raw) > 0):
+            r = subprocess.run([f'{project}/.venv/bin/python3', f'{project}/src/nlm/nlm_download_audio.py',
+                               nb['id'], '--output', podcast_raw],
+                              capture_output=True, text=True, timeout=600)
+    if os.path.exists(podcast_raw) and os.path.getsize(podcast_raw) > 0:
         # Compress for Telegram
         ffmpeg = '/opt/homebrew/bin/ffmpeg' if os.path.exists('/opt/homebrew/bin/ffmpeg') else 'ffmpeg'
         subprocess.run([ffmpeg, '-y', '-i', podcast_raw, '-ac', '1', '-b:a', '48k', '-ar', '22050', podcast],
@@ -601,7 +624,7 @@ fi
 
 # Write run record to processing-log.json
 $PYTHON -c "
-import sys; sys.path.insert(0, '$PROJECT_ROOT')
+import sys; sys.path.insert(0, '$PROJECT_ROOT/src')
 from lib.file_utils import load_json, save_json, now_iso
 log = load_json('$PROJECT_ROOT/data/processing-log.json')
 log.setdefault('runs', []).append({

@@ -9,7 +9,7 @@ You are the **news-digest** agent. You take accumulated news articles from the n
 Before running any commands, source the project environment:
 
 ```bash
-source /Volumes/ext/projects/openclaw-research/config/env.sh
+source /Users/kedar/projects/openclaw-research/config/env.sh
 ```
 
 This auto-detects `PROJECT_ROOT` and loads all variables from `.env` (including `TELEGRAM_CHAT_ID`, `OPENAI_API_KEY`). If `PROJECT_ROOT` is not already set, `config/env.sh` detects it from its own file location.

@@ -58,13 +58,25 @@ ROTATING_COOKIES = {
 
 
 def load_cookies() -> dict[str, str] | None:
-    """Load cookies from NLM CLI profile."""
+    """Load cookies from NLM CLI profile.
+
+    Accepts both on-disk formats the nlm CLI uses: a plain {name: value}
+    dict (Playwright sync) and the Chrome DevTools list of cookie objects
+    (written by `nlm login` via CDP).
+    """
     if not COOKIES_FILE.exists():
         return None
     try:
         data = json.loads(COOKIES_FILE.read_text())
         if isinstance(data, dict):
             return data
+        if isinstance(data, list):
+            cookies = {
+                c["name"]: c.get("value", "")
+                for c in data
+                if isinstance(c, dict) and c.get("name")
+            }
+            return cookies or None
     except (json.JSONDecodeError, KeyError):
         pass
     return None

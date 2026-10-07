@@ -486,7 +486,29 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
         log "  Report already downloaded: $REPORT_MD"
         step_ok "report-download (cached)"
     else
-    $NLM download report "$NOTEBOOK_ID" --output "$REPORT_MD" 2>&1
+        # Wait for the report artifact to finish generating. Without this the
+        # download runs ~10s after report-create and fails every time (the
+        # studio poll in Step 5 can exit before the artifact registers).
+        REPORT_WAIT=0
+        REPORT_MAX=1200
+        while [[ $REPORT_WAIT -lt $REPORT_MAX ]]; do
+            REPORT_STATUS=$($NLM studio status "$NOTEBOOK_ID" 2>&1)
+            if echo "$REPORT_STATUS" | grep -q '"type": "report"' && \
+               echo "$REPORT_STATUS" | grep -A2 '"type": "report"' | grep -q '"status": "completed"'; then
+                log "  Report ready (waited ${REPORT_WAIT}s)"
+                break
+            fi
+            log "  Report not ready yet... (${REPORT_WAIT}s elapsed)"
+            sleep 30
+            REPORT_WAIT=$((REPORT_WAIT + 30))
+        done
+        $NLM download report "$NOTEBOOK_ID" --output "$REPORT_MD" 2>&1
+        # One retry after a short wait if the download came back empty
+        if [[ ! -s "$REPORT_MD" ]]; then
+            log "  Report download empty — retrying in 60s..."
+            sleep 60
+            $NLM download report "$NOTEBOOK_ID" --output "$REPORT_MD" 2>&1
+        fi
     fi
     if [[ -f "$REPORT_MD" ]] && [[ -s "$REPORT_MD" ]]; then
         step_ok "report-download"
@@ -526,8 +548,19 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
             AUDIO_WAIT=$((AUDIO_WAIT + 30))
         done
 
-        # Primary: nlm CLI (fixed in nlm 0.4.9+)
-        $NLM download audio "$NOTEBOOK_ID" --output "$PODCAST_RAW" 2>&1
+        # Primary: nlm CLI (fixed in nlm 0.4.9+). For long audio the media URL
+        # can keep "propagating" for 10+ min after status=completed and the
+        # CLI's built-in ~4 min retry budget gives up too early — keep retrying.
+        DL_WAIT=0
+        DL_MAX=1200
+        while true; do
+            $NLM download audio "$NOTEBOOK_ID" --output "$PODCAST_RAW" 2>&1
+            [[ -s "$PODCAST_RAW" ]] && break
+            [[ $DL_WAIT -ge $DL_MAX ]] && break
+            log "  Audio download failed (URL likely still propagating) — retrying in 120s... (${DL_WAIT}s elapsed)"
+            sleep 120
+            DL_WAIT=$((DL_WAIT + 120))
+        done
         # Fallback 1: CDP (uses Chrome session cookies)
         if [[ ! -s "$PODCAST_RAW" ]]; then
             log "  nlm download failed — trying CDP..."
@@ -799,7 +832,7 @@ fi
 
 # Write run record to processing-log.json
 $PYTHON -c "
-import sys; sys.path.insert(0, '$PROJECT_ROOT')
+import sys; sys.path.insert(0, '$PROJECT_ROOT/src')
 from lib.file_utils import load_json, save_json, now_iso
 log = load_json('$PROJECT_ROOT/data/processing-log.json')
 log.setdefault('runs', []).append({

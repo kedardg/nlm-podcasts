@@ -3,8 +3,11 @@
 #   1. Quick auth check (fast — just tests cached credentials)
 #   2. Cookie rotation via RotateCookies endpoint (no browser needed)
 #   3. CDP extraction from running Chrome (if rotation fails)
-#   4. nlm login (connects to Chrome CDP if running)
-#   5. Playwright sync (launch headless Playwright, sync cookies to nlm CLI)
+#   4. CDP-attach login — launch Chrome headless with nlm's dedicated profile
+#      (persistent Google login) and run `nlm login --provider openclaw`.
+#      This is the layer that recovers a fully dead session without a human.
+#   5. nlm login (launches its own Chrome; fails if regular Chrome is running)
+#   6. Playwright sync (launch headless Playwright, sync cookies to nlm CLI)
 #
 # Usage: ./nlm_ensure_auth.sh
 # Exit 0 = auth is valid
@@ -57,7 +60,35 @@ if [ -f "$ROTATE_SCRIPT" ]; then
   echo "nlm auth: CDP extraction failed, trying next layer..."
 fi
 
-# ── Layer 4: nlm login (connects to Chrome CDP if running) ──
+# ── Layer 4: CDP-attach login via nlm's dedicated Chrome profile ──
+# The profile at ~/.notebooklm-mcp-cli/chrome-profiles/default keeps a
+# persistent Google login. Launch it headless with a debug port (only if no
+# CDP endpoint is already up) and let nlm extract cookies + session tokens.
+NLM_CHROME_PROFILE="$HOME/.notebooklm-mcp-cli/chrome-profiles/default"
+CHROME_BIN="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+CDP_URL="http://127.0.0.1:9222"
+echo "nlm auth: trying CDP-attach login..."
+LAUNCHED_CHROME_PID=""
+if ! curl -s -m 2 "$CDP_URL/json/version" >/dev/null 2>&1; then
+  if [ -x "$CHROME_BIN" ] && [ -d "$NLM_CHROME_PROFILE" ]; then
+    "$CHROME_BIN" --remote-debugging-port=9222 --no-first-run --no-default-browser-check \
+      --disable-extensions --user-data-dir="$NLM_CHROME_PROFILE" --remote-allow-origins='*' \
+      --headless=new "about:blank" >/dev/null 2>&1 &
+    LAUNCHED_CHROME_PID=$!
+    sleep 6
+  fi
+fi
+if curl -s -m 2 "$CDP_URL/json/version" >/dev/null 2>&1; then
+  if $NLM login --provider openclaw --cdp-url "$CDP_URL" 2>&1 && $NLM login --check >/dev/null 2>&1; then
+    echo "nlm auth: recovered via CDP-attach login"
+    [ -n "$LAUNCHED_CHROME_PID" ] && kill "$LAUNCHED_CHROME_PID" 2>/dev/null
+    exit 0
+  fi
+fi
+[ -n "$LAUNCHED_CHROME_PID" ] && kill "$LAUNCHED_CHROME_PID" 2>/dev/null
+echo "nlm auth: CDP-attach login failed, trying next layer..."
+
+# ── Layer 5: nlm login (launches its own Chrome; fails if Chrome already running) ──
 echo "nlm auth: trying nlm login..."
 if $NLM login 2>&1; then
   if $NLM login --check >/dev/null 2>&1; then
@@ -67,7 +98,7 @@ if $NLM login 2>&1; then
 fi
 echo "nlm auth: nlm login failed, trying next layer..."
 
-# ── Layer 5: Playwright sync (headless browser + auto-login from credentials) ──
+# ── Layer 6: Playwright sync (headless browser + auto-login from credentials) ──
 if [ -f "$PLAYWRIGHT_SCRIPT" ]; then
   echo "nlm auth: trying Playwright auth sync..."
   if $PYTHON "$PLAYWRIGHT_SCRIPT" --sync-auth 2>&1; then
@@ -90,12 +121,14 @@ NotebookLM auth failed
 All recovery layers exhausted:
 1. Cookie rotation (RotateCookies endpoint)
 2. CDP extraction from Chrome
-3. nlm login (Chrome CDP)
-4. Playwright auth sync (headless + auto-login)
+3. CDP-attach login (dedicated Chrome profile, headless)
+4. nlm login (Chrome CDP)
+5. Playwright auth sync (headless + auto-login)
 
-To fix:
-1. Run: .venv/bin/python3 scripts/nlm_playwright.py --login
-2. Or: open Chrome, log in to notebooklm.google.com, then run ~/.local/bin/nlm login
+To fix (the Google login in the dedicated Chrome profile has likely expired):
+1. Quit Chrome, then run: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 --user-data-dir="$HOME/.notebooklm-mcp-cli/chrome-profiles/default"
+   Sign in to Google there, then run: ~/.local/bin/nlm login --provider openclaw --cdp-url http://127.0.0.1:9222
+2. Or: .venv/bin/python3 scripts/nlm_playwright.py --login
 
 NLM-dependent steps will be skipped.
 ALERT

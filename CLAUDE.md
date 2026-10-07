@@ -85,7 +85,7 @@ openclaw-research/
 |   +-- weekly_pipeline.sh      # Weekly cron script (10-step pipeline)
 |   +-- fetch_and_deliver.sh    # Fetch + deliver artifacts to Telegram
 |   +-- telegram_send.sh         # Telegram Bot API helpers (tg_send_message, tg_send_file, tg_send_audio)
-|   +-- nlm_ensure_auth.sh      # 5-layer NLM auth recovery (quick check, rotation, CDP, nlm login, Playwright sync)
+|   +-- nlm_ensure_auth.sh      # 6-layer NLM auth recovery (quick check, rotation, CDP, CDP-attach login, nlm login, Playwright sync)
 |   +-- nlm_rotate_cookies.py   # Google PSIDTS cookie rotation
 |   +-- nlm_download_audio.py   # NLM audio download (CDP workaround)
 |   +-- nlm_create_report.sh    # NLM report with custom prompt
@@ -154,7 +154,7 @@ openclaw-research/
 | `weekly_pipeline.sh` | `bash scripts/weekly_pipeline.sh [--skip-nlm\|--dry-run]` | Weekly launchd (Sat 9 AM ET). 10 steps: archive, newsletter, blog, x-monitor, HF triage, data triage, content-processor, NLM orchestrator, magazine generator, news digest, delivery. Consolidated weekly report + per-category podcasts. |
 | `telegram_send.sh` | `source scripts/telegram_send.sh` | Telegram Bot API helpers: `tg_send_message`, `tg_send_file`, `tg_send_audio`. Uses curl directly — no OpenClaw gateway dependency. `sendAudio` gives inline player for podcasts. |
 | `fetch_and_deliver.sh` | `bash scripts/fetch_and_deliver.sh <category> <artifact>` | Fetch latest artifact + deliver via Telegram. Handles daily/research/news branching. |
-| `nlm_ensure_auth.sh` | `bash scripts/nlm_ensure_auth.sh` | 5-layer NLM auth recovery: (1) quick check, (2) cookie rotation, (3) CDP extraction, (4) `nlm login` via Chrome CDP, (5) Playwright `--sync-auth` with auto-login. Exit 1 = all failed + Telegram alert. |
+| `nlm_ensure_auth.sh` | `bash scripts/nlm_ensure_auth.sh` | 6-layer NLM auth recovery: (1) quick check, (2) cookie rotation, (3) CDP extraction, (4) CDP-attach login — headless Chrome with the dedicated `~/.notebooklm-mcp-cli/chrome-profiles/default` profile + `nlm login --provider openclaw`, (5) `nlm login`, (6) Playwright `--sync-auth` with auto-login. Exit 1 = all failed + Telegram alert. |
 | `nlm_rotate_cookies.py` | `.venv/bin/python3 scripts/nlm_rotate_cookies.py [--check\|--verify\|--cdp]` | Rotates Google PSIDTS cookies via RotateCookies endpoint. Falls back to CDP. |
 | `nlm_download_audio.py` | `.venv/bin/python3 scripts/nlm_download_audio.py <notebook> --output <path>` | Downloads NLM audio via Chrome CDP cookies (workaround for httpx TooManyRedirects). |
 | `nlm_create_report.sh` | `bash scripts/nlm_create_report.sh <notebook-id> [prompt-file]` | Creates NLM report with custom prompt. Defaults to weekly prompt; pass `config/prompts/daily-report-prompt-v3.txt` for daily. |
@@ -476,7 +476,7 @@ nlm notebook query research "Summarize the key findings"
 ```bash
 nlm audio create research --format deep_dive --length default --confirm
 nlm studio status research          # poll until generation completes
-# NOTE: `nlm download audio` is broken (TooManyRedirects). Use the workaround:
+# NOTE: `nlm download audio` works on nlm 0.9.6+ (BUG-001 fixed upstream). CDP fallback if it fails:
 .venv/bin/python3 scripts/nlm_download_audio.py research --output podcast.mp4
 ```
 Audio formats: `deep_dive`, `brief`, `critique`, `debate`
@@ -684,7 +684,7 @@ Pre-processing step in the weekly pipeline that handles deduplication, volume an
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| `nlm` (notebooklm-mcp-cli) | 0.3.15 | NotebookLM CLI for notebooks, sources, audio, reports |
+| `nlm` (notebooklm-mcp-cli) | 0.9.6 | NotebookLM CLI for notebooks, sources, audio, reports (0.9.x required since the NotebookLM → notebook.google.com migration) |
 | `ffmpeg` | 8.0.1 | Podcast audio compression (48kbps mono for Telegram) |
 | `pandoc` | 3.9 | Report format conversion |
 | `pango` | — | Font rendering (required by WeasyPrint) |
@@ -735,7 +735,7 @@ When registered via `nlm setup add claude-code`, Claude Code can call these tool
 - **Session labels**: Do NOT use `sessions_send` tool in pipeline instructions. The LLM should just reply with text directly — OpenClaw routes it to Telegram automatically.
 
 ### NotebookLM commands failing
-- Google rotates `__Secure-1PSIDTS` and other cookies every ~10 minutes. The `scripts/nlm_ensure_auth.sh` has 4-layer recovery: (1) quick auth check, (2) cookie rotation via `RotateCookies` endpoint, (3) CDP extraction from running Chrome, (4) headless `nlm login`.
+- Google rotates `__Secure-1PSIDTS` and other cookies every ~10 minutes. The `scripts/nlm_ensure_auth.sh` has 6-layer recovery: (1) quick auth check, (2) cookie rotation via `RotateCookies` endpoint, (3) CDP extraction from running Chrome, (4) CDP-attach login via the dedicated Chrome profile (headless, recovers a fully dead session), (5) `nlm login`, (6) Playwright sync.
 - Manual re-authenticate: `~/.local/bin/nlm login`
 - NotebookLM MCP registration with Claude Code is NOT needed for the OpenClaw pipeline — the pipeline uses `nlm` CLI commands directly
 - Verify tool is installed: `~/.local/bin/nlm --version`
@@ -767,10 +767,8 @@ When registered via `nlm setup add claude-code`, Claude Code can call these tool
 - NLM outputs audio as `audio/mp4` format — raw files are `.mp4`, ffmpeg converts to `.mp3`
 
 ### `nlm download audio` fails (TooManyRedirects)
-- **Known bug**: `nlm download audio` always fails because httpx strips cookies on cross-domain redirects through Google's CDN chain (`lh3.googleusercontent.com` -> `lh3.google.com` -> `googlevideo.com`).
-- **Fix**: Use `scripts/nlm_download_audio.py` instead, which extracts cookies from Chrome via CDP and manually follows the redirect chain with domain-aware cookies.
-- **Both pipelines** (`daily_pipeline.sh`, `weekly_pipeline.sh`) already use this workaround.
-- **Requires**: Chrome running with `--remote-debugging-port` (any port in 9222-9231).
+- **Fixed upstream** in notebooklm-mcp-cli 0.9.x (BUG-001) — `nlm download audio` works directly on the installed 0.9.6.
+- **Fallback** (kept in both pipelines): `scripts/nlm_download_audio.py` extracts cookies from Chrome via CDP and manually follows the redirect chain with domain-aware cookies. Requires Chrome running with `--remote-debugging-port` (any port in 9222-9231).
 - `nlm download report` works fine (text, not CDN-streamed).
 
 ### `nlm download` syntax (for report/other non-audio artifacts)
