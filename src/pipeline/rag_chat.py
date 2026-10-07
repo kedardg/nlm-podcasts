@@ -23,6 +23,10 @@ import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
+
+from nlm.client import extract_query_answer  # noqa: E402
+
 VENV_PYTHON = PROJECT_ROOT / ".venv" / "bin" / "python3"
 # src/rag/query.py — root rag/ holds only chroma_db/ since the repo layout
 # moved. The old path silently resolved to nothing, so every ChromaDB
@@ -82,12 +86,12 @@ def query_notebook(notebook_id: str, question: str) -> str | None:
             capture_output=True, text=True, timeout=60,
         )
         if result.returncode == 0 and result.stdout.strip():
-            # nlm CLI returns JSON: {"value": {"answer": "..."}}
+            # The answer's position in the JSON envelope changed between CLI
+            # versions; extract_query_answer handles both. Falling back to raw
+            # stdout here used to hand the caller a whole JSON payload as prose.
             try:
-                data = json.loads(result.stdout.strip())
-                answer = data.get("value", {}).get("answer", "")
-                return answer if answer else result.stdout.strip()
-            except (json.JSONDecodeError, AttributeError):
+                return extract_query_answer(json.loads(result.stdout.strip())) or None
+            except json.JSONDecodeError:
                 return result.stdout.strip()
         return None
     except subprocess.TimeoutExpired:

@@ -29,6 +29,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from lib.file_utils import load_json, save_json, now_iso
+from nlm.client import extract_query_answer
 from lib.log_utils import StepTimer
 from lib.url_utils import normalize_url_deep, ARXIV_ID_PATTERN
 
@@ -146,7 +147,14 @@ def nlm_query(notebook_id: str, question: str, source_ids: list[str] | None = No
         # an all-stub PDF (e.g. auth break) is diagnosable.
         print(f"WARN: nlm query failed: {e}", file=sys.stderr)
         return ""
-    return (data.get("value", {}) or {}).get("answer", "") or ""
+    answer = extract_query_answer(data)
+    if not answer:
+        # An answerable query returning nothing is worth saying out loud: this
+        # is what produced an all-stub PDF silently for months when the CLI
+        # moved the answer out of `value`.
+        print(f"WARN: nlm query returned no answer (keys: {sorted(data)})",
+              file=sys.stderr)
+    return answer
 
 
 # ── Selection ──────────────────────────────────────────────────────────────────

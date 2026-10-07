@@ -9,6 +9,52 @@ NLM authentication is a known limitation, not a bug — do not track it here.
 
 ## Open
 
+### BUG-018: Deep Dive stubbed every paper — `notebook query` answer moved out of `value`
+
+**Status**: fixed
+**Severity**: high — the Deep Dive Review was content-free for ~2 months
+**Found**: 2026-10-07
+**Fixed**: 2026-10-07
+**Component**: `src/pipeline/deep_dive_generator.py`, `src/pipeline/rag_chat.py`
+
+**Symptom**: `2026-10-05-deepdive.md` was 125 words across 3 papers, every one
+ending in `_(Limited information available from the notebook sources.)_`. One
+paper's entire body was `Nenad Tomasev et al.` For comparison, 2026-06-28 was
+2,565 words across 4 papers.
+
+**Root cause**: `nlm notebook query --json` returns the answer at the **top
+level** in 0.9.x:
+
+```
+keys: ['answer', 'question', 'conversation_id', 'sources_used', 'citations', 'references']
+```
+
+Earlier versions nested it as `{"value": {"answer": ...}}`, which is what both
+call sites read. The `nlm` binary was replaced on 2026-08-06 (0.9.x is required
+since the notebook.google.com migration); the extraction was not updated. So
+`nlm_query()` returned `""` for every paper, failed the 600-char content floor,
+and fell through to `_stub_explainer()` — whose body comes from the report
+summary, which is why the output looked plausible rather than empty.
+
+The query itself was never broken. It had been answering correctly the whole
+time, with citations.
+
+**Why it went unnoticed**: an empty answer is indistinguishable from "the
+notebook had nothing useful to say", and the stub fallback made every run look
+successful. `rag_chat.py` had the same bug but masked differently — it fell
+back to raw stdout, handing the caller an entire JSON payload as if it were
+prose.
+
+**Fix**: one shared `nlm.client.extract_query_answer()` that accepts both
+envelopes, used by both call sites. The legacy path is kept so a pinned or
+rolled-back CLI cannot silently reintroduce the stubs. An answerless query now
+logs a warning naming the payload keys, so the next envelope change is visible
+instead of silent. Covered by `tests/test_nlm_query_envelope.py`.
+
+**Verified**: regenerating 2026-10-06 gives 3,478 words across 5 papers, 0
+stubs, all 5 resolving via `[nlm]`.
+
+
 ### BUG-017: hard per-notebook source cap is unenforced on the split path
 
 **Status**: open

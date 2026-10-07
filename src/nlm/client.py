@@ -44,6 +44,43 @@ def _run(args, timeout=600) -> CommandResult:
     return CommandResult(proc.returncode == 0, proc.stdout, proc.stderr)
 
 
+def extract_query_answer(payload) -> str:
+    """Pull the answer text out of a `notebook query --json` payload.
+
+    The envelope moved: nlm 0.9.x returns ``{"answer": ...}`` at the top level,
+    earlier versions nested it as ``{"value": {"answer": ...}}``. Reading only
+    the nested path returns an empty string against a current CLI, which is
+    indistinguishable from "the notebook had nothing to say" — the Deep Dive
+    generator stubbed every paper for months on exactly that.
+
+    Both shapes are accepted so a pinned or rolled-back CLI cannot bring the
+    silent version back. Returns "" when there is genuinely no answer; callers
+    decide what that means rather than being handed the raw payload.
+    """
+    if not isinstance(payload, dict):
+        return ""
+    answer = payload.get("answer")
+    if not isinstance(answer, str) or not answer.strip():
+        nested = payload.get("value")
+        answer = nested.get("answer") if isinstance(nested, dict) else None
+    return answer.strip() if isinstance(answer, str) and answer.strip() else ""
+
+
+def notebook_query(notebook_id, question, source_ids=None, timeout=600) -> str:
+    """Ask a notebook a question. Returns the answer text, or "" if none."""
+    args = ["notebook", "query", notebook_id, question, "--json",
+            "--timeout", str(int(timeout))]
+    if source_ids:
+        args += ["--source-ids", ",".join(source_ids)]
+    res = _run(args, timeout=timeout + 30)
+    if not res.ok:
+        return ""
+    try:
+        return extract_query_answer(res.json())
+    except NlmError:
+        return ""
+
+
 def notebook_list(timeout=300):
     res = _run(["notebook", "list", "--json"], timeout=timeout)
     if not res.ok:
