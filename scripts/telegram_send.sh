@@ -39,6 +39,15 @@ _tg_check_response() {
 }
 
 # Send a text message. No parse_mode — safe for dynamic content with *, _, ` characters.
+# Reject paths curl would reinterpret. A ';' or ',' in a -F file value silently
+# changes the declared filename and content type, or truncates the path.
+_tg_path_ok() {
+    case "$1" in
+        *[';,']*|*$'\n'*) return 1 ;;
+    esac
+    [[ -f "$1" ]]
+}
+
 tg_send_message() {
     local text="$1"
     _tg_check_env || return 1
@@ -51,8 +60,8 @@ tg_send_message() {
     local response http_code
     response=$(curl -s -w '\n%{http_code}' \
         -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-        -F "chat_id=${TELEGRAM_CHAT_ID}" \
-        -F "text=${text}" \
+        --form-string "chat_id=${TELEGRAM_CHAT_ID}" \
+        --form-string "text=${text}" \
         2>/dev/null)
 
     http_code=$(echo "$response" | tail -1)
@@ -73,12 +82,17 @@ tg_send_file() {
         return 1
     fi
 
+    if ! _tg_path_ok "$file_path"; then
+        echo "ERROR: refusing unsafe upload path: $file_path" >&2
+        return 1
+    fi
+
     local cmd=(curl -s -w '\n%{http_code}' \
         -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
-        -F "chat_id=${TELEGRAM_CHAT_ID}" \
+        --form-string "chat_id=${TELEGRAM_CHAT_ID}" \
         -F "document=@${file_path}")
 
-    [[ -n "$caption" ]] && cmd+=(-F "caption=${caption}")
+    [[ -n "$caption" ]] && cmd+=(--form-string "caption=${caption}")
 
     local response http_code
     response=$("${cmd[@]}" 2>/dev/null)
@@ -101,12 +115,17 @@ tg_send_audio() {
         return 1
     fi
 
+    if ! _tg_path_ok "$file_path"; then
+        echo "ERROR: refusing unsafe upload path: $file_path" >&2
+        return 1
+    fi
+
     local cmd=(curl -s -w '\n%{http_code}' \
         -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendAudio" \
-        -F "chat_id=${TELEGRAM_CHAT_ID}" \
+        --form-string "chat_id=${TELEGRAM_CHAT_ID}" \
         -F "audio=@${file_path}")
 
-    [[ -n "$caption" ]] && cmd+=(-F "caption=${caption}")
+    [[ -n "$caption" ]] && cmd+=(--form-string "caption=${caption}")
 
     local response http_code
     response=$("${cmd[@]}" 2>/dev/null)

@@ -18,7 +18,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-DATA_DIR = Path(__file__).parent.parent / "data"
+# src/pipeline/fetch_latest.py -> project root is three levels up. Two levels
+# resolved to src/data, which does not exist, so every registry lookup fell
+# through to querying live notebooks.
+DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 NOTEBOOKS_FILE = DATA_DIR / "notebooks.json"
 NLM_BIN = Path.home() / ".local" / "bin" / "nlm"
 

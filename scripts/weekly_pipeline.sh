@@ -69,23 +69,13 @@ ensure_auth_or_rotate() {
     return 1
 }
 
-# ── Pipeline lock (prevent daily + weekly from running simultaneously) ──
-LOCKDIR="$PROJECT_ROOT/data/.pipeline.lock"
-if ! mkdir "$LOCKDIR" 2>/dev/null; then
-    # Check if stale (older than 2 hours)
-    if [[ -d "$LOCKDIR" ]]; then
-        LOCK_AGE=$(( $(date +%s) - $(stat -c %Y "$LOCKDIR" 2>/dev/null || stat -f %m "$LOCKDIR" 2>/dev/null || echo 0) ))
-        if [[ $LOCK_AGE -gt 7200 ]]; then
-            log "WARNING: Removing stale lock (${LOCK_AGE}s old)"
-            rmdir "$LOCKDIR" 2>/dev/null
-            mkdir "$LOCKDIR" 2>/dev/null || { log "ERROR: Cannot acquire lock"; exit 1; }
-        else
-            log "ERROR: Another pipeline is running (lock: $LOCKDIR, age: ${LOCK_AGE}s)"
-            exit 1
-        fi
-    fi
-fi
-trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
+# ── Pipeline lock (prevent daily + weekly + reclaim running simultaneously) ──
+# Liveness-based, not clock-based: a reclaim pass over hundreds of notebooks
+# legitimately outlives any fixed timeout, and the old mtime heuristic paired
+# with an unconditional `trap rmdir` let a superseded process delete the new
+# holder's lock. See scripts/pipeline_lock.sh.
+source "$PROJECT_ROOT/scripts/pipeline_lock.sh"
+acquire_pipeline_lock "$PROJECT_ROOT/data/.pipeline.lock" "weekly" || exit 1
 
 log "═══ Weekly Research Digest Pipeline — $DATE ═══"
 log "Project: $PROJECT_ROOT"
@@ -164,6 +154,26 @@ else
     $PYTHON "$PROJECT_ROOT/src/pipeline/content_processor.py" 2>&1 && step_ok "content-processor" || step_fail "content-processor"
 fi
 echo ""
+
+# ── Steps 5-7 retired: weekly no longer creates notebooks ─────
+# Weekly notebook creation is what exhausted the 500-notebook account. It split
+# a single category-week into dozens of notebooks — "Machine Learning - Week of
+# 2026-08-15" alone became 28 of them across 441 sources — and none was ever
+# deleted. The daily pipeline is now the only notebook-producing path, at about
+# one a day, and it releases its slot in Step 11.
+#
+# Everything above this line is data collection (newsletters, blogs, X,
+# archiving, HF triage, content processing) and still runs on the weekly
+# schedule; it feeds the daily feed and the magazine. Set WEEKLY_NOTEBOOKS=1 to
+# re-enable the orchestrator, which requires free capacity in the account.
+if [[ "${WEEKLY_NOTEBOOKS:-0}" != "1" ]]; then
+    log "Steps 5-7: skipped (weekly notebook creation is retired)"
+    log "  Data collection steps 0-4 completed; daily pipeline owns notebooks."
+    echo ""
+    PIPELINE_END=$(date +%s)
+    log "=== Weekly data collection complete ($((PIPELINE_END - PIPELINE_START))s) ==="
+    exit 0
+fi
 
 # ── Step 5: NotebookLM Orchestrator ───────────────────────────
 log "Step 5: NotebookLM Orchestrator"

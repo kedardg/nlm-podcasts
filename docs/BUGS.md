@@ -9,6 +9,22 @@ NLM authentication is a known limitation, not a bug — do not track it here.
 
 ## Open
 
+### BUG-017: hard per-notebook source cap is unenforced on the split path
+
+**Status**: open
+**Severity**: low — no observed impact, the guard is simply unreachable
+**Found**: 2026-09-29
+**Component**: `src/data_triage.py:363-370`
+
+**Description**: The split path computes
+`num_splits = ceil(source_count / IDEAL_SPLIT_SIZE)` and then guards each chunk
+with `if end - start > MAX_SOURCES_PER_NOTEBOOK`. By construction
+`end - start <= IDEAL_SPLIT_SIZE` (15), which is always below
+`MAX_SOURCES_PER_NOTEBOOK` (50), so the branch never executes and the hard cap
+is enforced only on the non-split path at `:326`.
+
+**Related**: the alias-slash corruption found alongside this is tracked and fixed as BUG-016 below.
+
 ### BUG-002: 400 "reasoning" error crashes OpenClaw sessions
 
 **Status**: open (upstream fix in OpenClaw 2026.2.26, update pending)

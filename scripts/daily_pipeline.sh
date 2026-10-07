@@ -111,25 +111,13 @@ ensure_auth_or_rotate() {
     return 1
 }
 
-# ── Pipeline lock (prevent daily + weekly from running simultaneously) ──
-LOCKDIR="$PROJECT_ROOT/data/.pipeline.lock"
-if ! mkdir "$LOCKDIR" 2>/dev/null; then
-    # Check if stale (older than 4 hours — sized above the worst-case run:
-    # Step 5 (60m) + Step 6 audio (60m) + Step 6.6 deep dives, so a slow-but-live
-    # run is never mistaken for stale and double-run).
-    if [[ -d "$LOCKDIR" ]]; then
-        LOCK_AGE=$(( $(date +%s) - $(stat -c %Y "$LOCKDIR" 2>/dev/null || stat -f %m "$LOCKDIR" 2>/dev/null || echo 0) ))
-        if [[ $LOCK_AGE -gt 14400 ]]; then
-            log "WARNING: Removing stale lock (${LOCK_AGE}s old)"
-            rmdir "$LOCKDIR" 2>/dev/null
-            mkdir "$LOCKDIR" 2>/dev/null || { log "ERROR: Cannot acquire lock"; exit 1; }
-        else
-            log "ERROR: Another pipeline is running (lock: $LOCKDIR, age: ${LOCK_AGE}s)"
-            exit 1
-        fi
-    fi
-fi
-trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
+# ── Pipeline lock (prevent daily + weekly + reclaim running simultaneously) ──
+# Liveness-based, not clock-based: a reclaim pass over hundreds of notebooks
+# legitimately outlives any fixed timeout, and the old mtime heuristic paired
+# with an unconditional `trap rmdir` let a superseded process delete the new
+# holder's lock. See scripts/pipeline_lock.sh.
+source "$PROJECT_ROOT/scripts/pipeline_lock.sh"
+acquire_pipeline_lock "$PROJECT_ROOT/data/.pipeline.lock" "daily" || exit 1
 
 log "=== Daily Tech Feed Pipeline — $DATE ==="
 log "Project: $PROJECT_ROOT"
@@ -149,6 +137,15 @@ $PYTHON "$PROJECT_ROOT/src/blog_monitor.py" 2>&1 && { step_ok "blog-monitor"; st
 echo ""
 
 # ── Step 1: Generate daily feed HTML ────────────────────────────
+log "Step 0.7: Expire sources outside the collection window"
+# Weekly used to drain everything older than the daily window into its own
+# notebooks. With weekly notebook creation retired, anything that falls out of
+# the two-day window would otherwise accumulate in sources.json forever. Rows
+# are moved to data/archive/, not deleted.
+$PYTHON "$PROJECT_ROOT/src/pipeline/expire_sources.py" --days 2 2>&1 && \
+    step_ok "expire-sources" || step_fail "expire-sources"
+echo ""
+
 log "Step 1: Generate daily feed (markdown + HTML)"
 DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PYTHON "$PROJECT_ROOT/src/daily_feed_generator.py" \
     --pdf-only --date "$DATE" 2>&1
@@ -309,6 +306,29 @@ fi
 if ! $SKIP_NLM; then
     log "Step 2: Create NLM notebook"
 
+    # Capacity guard. The account is hard-capped at 500 notebooks; creating
+    # blindly into a full account is what took this pipeline down for months.
+    if ! $PYTHON "$PROJECT_ROOT/src/pipeline/daily_capture_delete.py" \
+            --capacity-check >/dev/null 2>&1; then
+        log "  ERROR: notebook capacity exhausted — run reclaim_notebooks.py"
+        alert "Daily pipeline: NotebookLM capacity exhausted; run reclaim_notebooks.py"
+        SKIP_NLM=true
+    fi
+fi
+
+if ! $SKIP_NLM; then
+    # Idempotency, first against the archive. The alias check below cannot be
+    # the only guard any more: Step 11 deletes the alias along with the
+    # notebook, so a rerun would sail past it and build a second notebook —
+    # and regenerate the whole studio set — for a date already finished.
+    if $PYTHON "$PROJECT_ROOT/src/pipeline/daily_capture_delete.py" \
+            --already-done --run-id "daily_$DATE" 2>/dev/null; then
+        log "  Already archived for $DATE; artifacts are on disk"
+        SKIP_NLM=true
+    fi
+fi
+
+if ! $SKIP_NLM; then
     # Idempotency: check if notebook already exists for this date
     EXISTING_NB=$($NLM alias get "daily-$DATE" 2>/dev/null | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)
     if [[ -n "$EXISTING_NB" ]]; then
@@ -459,19 +479,22 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
         fi
 
         AUTH_FAILURES=0  # Reset on success
-        if echo "$STATUS_OUT" | grep -qi "in_progress\|generating\|pending"; then
-            log "  Still generating... (${WAITED}s elapsed)"
-            sleep $POLL_INTERVAL
-            WAITED=$((WAITED + POLL_INTERVAL))
-        else
-            break
-        fi
+        break
     done
 
-    if [[ $WAITED -ge $MAX_WAIT ]]; then
-        step_fail "studio-poll (timeout after ${MAX_WAIT}s)"
+    # Wait for positive confirmation that each artifact is finished.
+    #
+    # The old poll asked "does the status mention in_progress?" and treated
+    # "no" as done. In the seconds after `report create` the artifact is not
+    # registered yet, so the status mentions nothing — the poll exited
+    # immediately, logged "completed in 0s", and Step 6 then tried to download
+    # a report that did not exist. Absence of evidence was read as evidence.
+    if $PYTHON "$PROJECT_ROOT/src/pipeline/daily_capture_delete.py" \
+            --wait-for report,audio --notebook-id "$NOTEBOOK_ID" \
+            --timeout "$MAX_WAIT" --poll-interval "$POLL_INTERVAL"; then
+        step_ok "studio-poll"
     else
-        step_ok "studio-poll (completed in ${WAITED}s)"
+        step_fail "studio-poll (timeout or generation failure)"
     fi
     echo ""
 fi
@@ -486,22 +509,11 @@ if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
         log "  Report already downloaded: $REPORT_MD"
         step_ok "report-download (cached)"
     else
-        # Wait for the report artifact to finish generating. Without this the
-        # download runs ~10s after report-create and fails every time (the
-        # studio poll in Step 5 can exit before the artifact registers).
-        REPORT_WAIT=0
-        REPORT_MAX=1200
-        while [[ $REPORT_WAIT -lt $REPORT_MAX ]]; do
-            REPORT_STATUS=$($NLM studio status "$NOTEBOOK_ID" 2>&1)
-            if echo "$REPORT_STATUS" | grep -q '"type": "report"' && \
-               echo "$REPORT_STATUS" | grep -A2 '"type": "report"' | grep -q '"status": "completed"'; then
-                log "  Report ready (waited ${REPORT_WAIT}s)"
-                break
-            fi
-            log "  Report not ready yet... (${REPORT_WAIT}s elapsed)"
-            sleep 30
-            REPORT_WAIT=$((REPORT_WAIT + 30))
-        done
+        # Step 5 already waited for report+audio to report 'completed', via
+        # daily_capture_delete.py --wait-for, so the artifact is ready here.
+        # That replaced an inline loop that grepped `studio status` text; it
+        # fixed the same race (BUG-012) but matched on absence of in_progress,
+        # which reads an unregistered artifact as finished.
         $NLM download report "$NOTEBOOK_ID" --output "$REPORT_MD" 2>&1
         # One retry after a short wait if the download came back empty
         if [[ ! -s "$REPORT_MD" ]]; then
@@ -691,19 +703,11 @@ except Exception:
 
 fi
 
-# ── Step 7: Get share link ─────────────────────────────────────
+# ── Step 7: retired — share links do not survive Step 11 ──────
+# A public notebook link stops resolving the moment the notebook is deleted,
+# so emitting one into a Telegram message that stays in the user's history
+# just manufactures a dead link. The PDF and MP3 are attached directly.
 SHARE_LINK=""
-if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
-    log "Step 7: Get share link"
-    SHARE_OUT=$($NLM share public "$NOTEBOOK_ID" 2>&1)
-    if [[ $? -eq 0 ]]; then
-        SHARE_LINK=$(echo "$SHARE_OUT" | grep -oE 'https?://[^ ]+' | head -1)
-        step_ok "share-link"
-    else
-        step_fail "share-link"
-    fi
-    echo ""
-fi
 
 # ── Step 8: Deliver via Telegram ───────────────────────────────
 log "Step 8: Deliver via Telegram"
@@ -810,6 +814,21 @@ if [[ -n "$NOTEBOOK_ID" ]] && [[ -f "$REPORT_MD" ]] && [[ -f "$PROJECT_ROOT/src/
     $PYTHON "$PROJECT_ROOT/src/pipeline/index_notebook.py" \
         --notebook-id "$NOTEBOOK_ID" --report-file "$REPORT_MD" 2>&1 && \
         step_ok "rag-index" || step_fail "rag-index"
+    echo ""
+fi
+
+# ── Step 11: Capture the notebook to the archive, then delete it ──
+# Everything the notebook was for has already been generated, downloaded and
+# delivered by this point. Capturing and deleting keeps the account footprint
+# flat instead of growing by one notebook a day until create fails.
+if ! $SKIP_NLM && [[ -n "$NOTEBOOK_ID" ]]; then
+    log "Step 11: Archive notebook and release the slot"
+    $PYTHON "$PROJECT_ROOT/src/pipeline/daily_capture_delete.py" \
+        --notebook-id "$NOTEBOOK_ID" \
+        --run-id "daily_$DATE" \
+        --alias "daily-$DATE" \
+        --title "Daily Feed — $DATE" 2>&1 && \
+        step_ok "notebook-archive" || step_fail "notebook-archive"
     echo ""
 fi
 

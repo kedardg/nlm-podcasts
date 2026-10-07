@@ -24,7 +24,10 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 VENV_PYTHON = PROJECT_ROOT / ".venv" / "bin" / "python3"
-QUERY_SCRIPT = PROJECT_ROOT / "rag" / "query.py"
+# src/rag/query.py — root rag/ holds only chroma_db/ since the repo layout
+# moved. The old path silently resolved to nothing, so every ChromaDB
+# lookup returned fallback_used and /chat always answered "no notebooks".
+QUERY_SCRIPT = PROJECT_ROOT / "src" / "rag" / "query.py"
 AUTH_SCRIPT = PROJECT_ROOT / "scripts" / "nlm_ensure_auth.sh"
 NLM_BIN = Path.home() / ".local" / "bin" / "nlm"
 MAX_NOTEBOOKS = 3
