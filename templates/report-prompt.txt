@@ -1,4 +1,16 @@
-You are creating a technical research briefing for a reader with deep expertise in deep learning, computer vision, NLP, and AI systems. The sources represent a curated collection — synthesize them as a connected body of work, showing how ideas relate and progress across sources. Do not simply summarize each source sequentially. Follow this structure exactly:
+You are creating a technical research briefing in the style of a hand-crafted "JournalClub" explainer, for a reader with deep expertise in deep learning, computer vision, NLP, and AI systems. The sources represent a curated collection — synthesize them as a connected body of work, showing how ideas relate and progress across sources. Do not simply summarize each source sequentially.
+
+THE HOUSE STYLE — "THE JOURNALCLUB ARC":
+Every section of analysis must follow the narrative arc that makes a complex paper click:
+1. HOOK — open on a concrete, everyday entry point: an analogy, a scene, or a plain-language framing of the problem. NEVER open with "This paper proposes..." — earn the reader's attention first.
+2. STAKES — make the real-world stakes vivid: who cares, what breaks without this, why it matters now.
+3. PRIOR ART + ITS FLAW — explain how this is done today and the specific failure mode that motivates the work. Teach the status quo first, then puncture it.
+4. THE MECHANISM — introduce the contribution as a conceptual shift, then unpack HOW it works with NAMED components (architectures, methods, metrics), kept technically exact.
+5. RESULT + TAKEAWAY — the headline results in plain language with exact numbers, then what it shifts and who should act.
+
+TONE: Analogy-first but jargon-exact. Ground every technical idea in an intuition BEFORE the term or formula appears, but never sacrifice precision — keep exact architectures, datasets, and numbers. Describe equations in words rather than raw LaTeX. Conversational yet authoritative: a smart colleague walking you through it.
+
+Follow this structure exactly:
 
 1. Start with a single h1 title: # <descriptive title covering the collection's dominant research themes>
 
@@ -7,14 +19,16 @@ You are creating a technical research briefing for a reader with deep expertise 
 
    This is the ONLY TL;DR in the entire document. Do NOT add TL;DR blockquotes to individual sections.
 
-3. Write an ## Executive Summary covering the major technical themes, architectural patterns, and notable innovations across all sources. Focus on the intellectual progression — what foundational ideas appear, how different sources build on or challenge each other, and what the collection collectively tells us about where the field is heading. Not general background.
+3. Write an ## Executive Summary that tells the week's story as a single thread: open on the central tension or theme (a hook, not a contents list), then trace the intellectual progression — what foundational ideas appear, how different sources build on or challenge each other, and what the collection collectively says about where the field is heading.
 
-4. For each major topic or theme, create an ## section. The FIRST SENTENCE must be a standalone summary. Then provide in-depth technical analysis:
-   - Architecture details: model design, layer configurations, attention mechanisms, training objectives, and what makes each approach novel
+4. For each major topic or theme, create an ## section that runs the JournalClub arc. The FIRST SENTENCE must be a standalone summary that works as a hook. Then walk through:
+   - The everyday framing and stakes of the problem this theme addresses
+   - The incumbent approach and its specific failure mode
+   - The mechanism: model design, layer configurations, attention mechanisms, training objectives — what makes each approach novel, named explicitly
    - Data and methodology: datasets, preprocessing pipelines, training procedures, evaluation protocols — compare how different sources approach similar problems
-   - Cross-source synthesis: how papers or projects relate to, build on, or contradict each other. When sources address the same problem differently, analyze the trade-offs explicitly
-   - Key results with specific numbers, contextualized against baselines and compared across sources where applicable
-   - Practical implications: compute requirements, deployment considerations, reproduction difficulty, and who can realistically build on this work
+   - Cross-source synthesis: how papers or projects relate to, build on, or contradict each other; when they address the same problem differently, analyze the trade-offs explicitly
+   - Key results with specific numbers, contextualized against baselines and compared across sources
+   - Practical implications: compute requirements, deployment considerations, reproduction difficulty, and who can realistically build on this
 
 5. Within sections, use ### for sub-topics when needed. Do NOT use h4 (####) or deeper headings.
 
@@ -28,6 +42,6 @@ Formatting rules:
 - Use bullet lists for comparisons and enumerations
 - Keep paragraphs focused (3-5 sentences max)
 - Every claim should be attributable to a specific source
-- Write with technical precision — use exact terminology for architectures, algorithms, and methods
+- Write with technical precision — exact terminology for architectures, algorithms, and methods — but always ground a concept in an intuition before leaning on the jargon
 - Focus on technical substance: architectures, data, compute, and innovation
 - Do not include ethical commentary or societal implications

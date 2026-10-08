@@ -9,22 +9,67 @@ NLM authentication is a known limitation, not a bug — do not track it here.
 
 ## Open
 
-### BUG-001: `nlm download audio` always fails (TooManyRedirects)
+### BUG-018: Deep Dive stubbed every paper — `notebook query` answer moved out of `value`
 
-**Status**: open (upstream bug in notebooklm-mcp-cli)
-**Severity**: high — breaks all podcast downloads
-**Found**: 2026-02-27
-**Component**: `notebooklm-mcp-cli` → `notebooklm_tools/core/download.py`
+**Status**: fixed
+**Severity**: high — the Deep Dive Review was content-free for ~2 months
+**Found**: 2026-10-07
+**Fixed**: 2026-10-07
+**Component**: `src/pipeline/deep_dive_generator.py`, `src/pipeline/rag_chat.py`
 
-**Description**: `nlm download audio` fails with `httpx.TooManyRedirects` because httpx strips cookies on cross-domain redirects. Google's CDN chain is: `lh3.googleusercontent.com` → `lh3.google.com` → `googlevideo.com` — each hop needs domain-matched cookies that httpx drops.
+**Symptom**: `2026-10-05-deepdive.md` was 125 words across 3 papers, every one
+ending in `_(Limited information available from the notebook sources.)_`. One
+paper's entire body was `Nenad Tomasev et al.` For comparison, 2026-06-28 was
+2,565 words across 4 papers.
 
-The error is hidden by a generic `ServiceError("Download failed for audio.")` in `notebooklm_tools/services/downloads.py:175-179`.
+**Root cause**: `nlm notebook query --json` returns the answer at the **top
+level** in 0.9.x:
 
-**Workaround 1 (CDP)**: `scripts/nlm_download_audio.py` — extracts cookies from Chrome via CDP (`Network.getAllCookies`), manually follows the redirect chain with domain-aware cookie matching using `requests`. Requires Chrome running with `--remote-debugging-port` (any port in 9222-9231).
+```
+keys: ['answer', 'question', 'conversation_id', 'sources_used', 'citations', 'references']
+```
 
-**Workaround 2 (Playwright)**: `scripts/nlm_playwright.py` — drives NLM's web UI via Playwright browser automation. Downloads audio using `page.expect_download()` which handles the full redirect chain natively (browser manages cookies). Use `--use-playwright` flag in `daily_pipeline.sh`. No Chrome CDP required — Playwright manages its own Chromium instance.
+Earlier versions nested it as `{"value": {"answer": ...}}`, which is what both
+call sites read. The `nlm` binary was replaced on 2026-08-06 (0.9.x is required
+since the notebook.google.com migration); the extraction was not updated. So
+`nlm_query()` returned `""` for every paper, failed the 600-char content floor,
+and fell through to `_stub_explainer()` — whose body comes from the report
+summary, which is why the output looked plausible rather than empty.
 
-**Upstream fix**: Would need httpx cookie policy change or NLM using `requests` instead of `httpx` for audio downloads.
+The query itself was never broken. It had been answering correctly the whole
+time, with citations.
+
+**Why it went unnoticed**: an empty answer is indistinguishable from "the
+notebook had nothing useful to say", and the stub fallback made every run look
+successful. `rag_chat.py` had the same bug but masked differently — it fell
+back to raw stdout, handing the caller an entire JSON payload as if it were
+prose.
+
+**Fix**: one shared `nlm.client.extract_query_answer()` that accepts both
+envelopes, used by both call sites. The legacy path is kept so a pinned or
+rolled-back CLI cannot silently reintroduce the stubs. An answerless query now
+logs a warning naming the payload keys, so the next envelope change is visible
+instead of silent. Covered by `tests/test_nlm_query_envelope.py`.
+
+**Verified**: regenerating 2026-10-06 gives 3,478 words across 5 papers, 0
+stubs, all 5 resolving via `[nlm]`.
+
+
+### BUG-017: hard per-notebook source cap is unenforced on the split path
+
+**Status**: open
+**Severity**: low — no observed impact, the guard is simply unreachable
+**Found**: 2026-09-29
+**Component**: `src/data_triage.py:363-370`
+
+**Description**: The split path computes
+`num_splits = ceil(source_count / IDEAL_SPLIT_SIZE)` and then guards each chunk
+with `if end - start > MAX_SOURCES_PER_NOTEBOOK`. By construction
+`end - start <= IDEAL_SPLIT_SIZE` (15), which is always below
+`MAX_SOURCES_PER_NOTEBOOK` (50), so the branch never executes and the hard cap
+is enforced only on the non-split path at `:326`.
+
+**Related**: the alias-slash corruption found alongside this is tracked and fixed as BUG-016 below.
 
 ### BUG-002: 400 "reasoning" error crashes OpenClaw sessions
 
@@ -108,6 +153,113 @@ Compounding factor: the LLM agent wraps pipeline commands with `source config/en
 ---
 
 ## Fixed
+
+### BUG-016: Weekly split-notebook slugs corrupt paths and collide; delivery retries podcasts that were never created
+
+**Status**: fixed
+**Severity**: medium — Aug 8 weekly ran 8h51m and delivered no split-part podcasts
+**Found**: 2026-08-09 (2026-08-08 weekly run)
+**Fixed**: 2026-08-09
+**Component**: `scripts/weekly_pipeline.sh` (creation + delivery phases)
+
+**Description**: Three interacting problems on the backlog-flush run (~30 sub-notebooks
+from a month of queued sources):
+1. Slugs from names like `Open Source & Tools (Part 1/20)` kept `(` and `/` (path
+   corruption) and the 30-char truncation made different parts collide on the same
+   filenames.
+2. `has_podcast` was hardcoded `True` in notebooks.json even when `nlm audio create`
+   failed — most split-part podcast creations failed (NLM audio quota exhausted by
+   ~30 requests in one run).
+3. The delivery phase therefore spent ~6 min retrying each download that could never
+   exist (~3 wasted hours).
+
+**Fix**: Slugs sanitized (`re.sub(r'[^a-z0-9._-]+', '-')`) with in-run dedup counter;
+`has_podcast` now records the actual create result; delivery skips podcast download when
+creation failed. Quota note: the ~30-notebook fan-out was a one-time backlog flush —
+normal weekly volume is a handful of notebooks. If a flush like that recurs, expect
+podcast quota failures again (reports are unaffected).
+
+### BUG-015: Long-audio download fails — media URL propagation outlasts CLI retry budget
+
+**Status**: fixed
+**Severity**: medium — daily podcast (~40 min, `--length long`) never downloaded/delivered
+**Found**: 2026-08-07 (first seen on the 2026-08-06 run)
+**Fixed**: 2026-08-07
+**Component**: `scripts/daily_pipeline.sh` Step 6, `scripts/weekly_pipeline.sh` delivery phase
+
+**Description**: After `studio status` reports an audio artifact `completed`, NLM's media
+download URL can keep returning 404 ("still propagating") for 10+ minutes on long audio.
+The nlm CLI's built-in retry gives up after ~4 minutes, so the daily pipeline's primary
+download failed, and both fallbacks were unavailable (no Chrome CDP running; Playwright
+session dead). Short deep-dive podcasts in the same run downloaded fine 10 minutes later,
+confirming pure propagation delay. Note: a manual re-download later must pass
+`--id <artifact-id>` — by then the notebook has multiple audio artifacts and the un-ID'd
+download grabs the wrong one (during the pipeline Step 6 runs before the deep dives are
+created, so it's unambiguous there).
+
+**Fix**: Daily Step 6 retries `nlm download audio` every 120s for up to 20 min before
+falling back to CDP/Playwright. Weekly delivery now uses the nlm CLI as primary (with the
+same retry) and the CDP workaround script as fallback (it previously used CDP-only, which
+requires a running Chrome debug session).: Cookie rotation dead — can't read Chrome-list `cookies.json` format
+
+**Status**: fixed
+**Severity**: high — killed the auth-recovery layer, all daily runs failed at `nlm-auth` Aug 2–5
+**Found**: 2026-08-06
+**Fixed**: 2026-08-06
+**Component**: `src/nlm/nlm_rotate_cookies.py`
+
+**Description**: `load_cookies()` only accepted a `{name: value}` dict, but the nlm CLI (and `nlm login` via CDP) writes `cookies.json` in Chrome DevTools format — a **list** of cookie objects. When the file was rewritten in list format on Aug 1, rotation started misreporting "No cookies found" even though the file existed, so the layer that keeps the Google session alive between logins never ran. Once the PSIDTS went stale, every downstream recovery layer failed too (no Chrome CDP, headless Google login blocked).
+
+**Fix**: `load_cookies()` now accepts both formats (mirrors the CLI's own `parse_cookies_from_chrome_format`). Tests in `tests/test_nlm_rotate_cookies.py`.
+
+**Recovery path when the session is fully dead**: launch Chrome with nlm's dedicated profile (`~/.notebooklm-mcp-cli/chrome-profiles/default`, which holds a persistent Google login) with `--remote-debugging-port=9222`, then `nlm login --provider openclaw --cdp-url http://127.0.0.1:9222`.
+
+### BUG-012: Daily report download races report generation — failed every run since ~Jul 13
+
+**Status**: fixed
+**Severity**: medium — daily NLM report silently missing (magazine layout fell back to plain PDF)
+**Found**: 2026-08-06
+**Fixed**: 2026-08-06
+**Component**: `scripts/daily_pipeline.sh` Step 5/6
+
+**Description**: The Step 5 studio poll greps for `in_progress|generating|pending`, but the old CLI's (0.3.15) status output stopped matching those strings after an NLM backend change (~Jul 12), so the poll exited in 0s and Step 6 tried `nlm download report` ~10s after `report create` — always failing ("Download failed for report."). The audio path survived because it has its own readiness loop; the report had none.
+
+**Fix**: Step 6 now waits for the report artifact to reach `"status": "completed"` (up to 20 min, mirroring the audio loop) and retries an empty download once. The new CLI (0.9.6) also emits parseable JSON from `studio status`, which re-enables the Step 5 poll.
+
+### BUG-013: `processing-log.json` never updated — `sys.path` broken by `src/` refactor
+
+**Status**: fixed
+**Severity**: low — run history invisible (last daily entry was April), pipelines still ran
+**Found**: 2026-08-06
+**Fixed**: 2026-08-06
+**Component**: `scripts/daily_pipeline.sh`, `scripts/weekly_pipeline.sh`
+
+**Description**: Recurrence of the BUG-005 import-path class: the inline run-record writer did `sys.path.insert(0, '$PROJECT_ROOT')` + `from lib.file_utils import ...`, but the repo restructure moved `lib/` to `src/lib/`. The failure was swallowed by `2>/dev/null || true`.
+
+**Fix**: `sys.path.insert(0, '$PROJECT_ROOT/src')` in both pipelines.
+
+### BUG-014: ffmpeg broken by brew x265 upgrade — podcast compression aborted Jul 30–31
+
+**Status**: fixed (environment)
+**Severity**: medium — podcasts downloaded but never compressed/delivered
+**Found**: 2026-08-06
+**Fixed**: 2026-08-06
+
+**Description**: Homebrew upgraded `x265` to 4.2 (ships `libx265.216.dylib`) while the installed `ffmpeg 8.0.1_4` binary still linked `libx265.215.dylib` → `dyld` abort on every launch (`podcast-compress` step failed with "Abort trap: 6").
+
+**Fix**: `brew reinstall ffmpeg` (now 8.1.2). If it recurs after future brew upgrades, the same reinstall applies.
+
+### BUG-001: `nlm download audio` always fails (TooManyRedirects)
+
+**Status**: fixed upstream (notebooklm-mcp-cli 0.9.6)
+**Severity**: high — broke all podcast downloads
+**Found**: 2026-02-27
+**Fixed**: 2026-08-06 (by upgrading `notebooklm-mcp-cli` 0.3.15 → 0.9.6)
+**Component**: `notebooklm-mcp-cli` → `notebooklm_tools/core/download.py`
+
+**Description**: `nlm download audio` failed with `httpx.TooManyRedirects` because httpx stripped cookies on cross-domain redirects through Google's CDN chain (`lh3.googleusercontent.com` → `lh3.google.com` → `googlevideo.com`).
+
+**Fix**: Upstream fixed in the 0.4.9+ line; verified working directly on 0.9.6. The pipeline already tries the CLI first and keeps `scripts/nlm_download_audio.py` (CDP) and Playwright as fallbacks — no pipeline change needed.
 
 ### BUG-005: `flock` not available on macOS — pipeline lock always fails
 

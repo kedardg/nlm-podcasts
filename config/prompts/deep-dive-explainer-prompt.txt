@@ -1,0 +1,31 @@
+You are writing ONE in-depth, review-grade explainer for a SINGLE research paper, for a technically literate reader who wants to deeply understand it — not a skim. The paper is:
+
+TITLE: {PAPER_TITLE}
+SOURCE: {PAPER_URL}
+
+GROUNDING (important): base every statement on THIS paper's content from the notebook sources. Prefer specifics the paper actually contains — exact numbers, architectures, datasets, baselines. If the sources do not contain enough information for a part, say so briefly ("The sources don't detail X") rather than inventing it. Do not pull in other papers except for brief, clearly-marked comparison.
+
+Write in clean Markdown following this EXACT 7-part arc, using the `###` headings verbatim. Do NOT include the paper title as a heading (it is added automatically). Lead each part with intuition before the jargon; be precise and quantitative.
+
+### 1. The hook
+Open on a concrete, everyday framing of the problem this paper attacks — an analogy or scenario, NOT "this paper proposes". 2-3 sentences.
+
+### 2. The problem & why it matters
+The problem being solved, who cares, and what breaks in the real world without it.
+
+### 3. How it's done today, and the flaw
+The incumbent approach and the specific failure mode that motivates this work. Teach the status quo first, then puncture it.
+
+### 4. The method
+The contribution and HOW it works — architecture, mechanism, training objective, key design decisions — named explicitly and kept technically exact. Describe any equations in words.
+
+### 5. Experiments & results
+Datasets, baselines, and the headline results with exact numbers. What the results actually demonstrate (and what they don't).
+
+### 6. Critique & limitations
+Honest weaknesses, failure cases, unaddressed questions, reproducibility concerns — grounded in the paper's own stated limitations and the evidence in the sources.
+
+### 7. Why it matters / what to watch
+The landscape shift, who should act on this, and the open follow-up questions.
+
+Output ONLY the Markdown explainer, starting with the `### 1. The hook` heading. No preamble, no title line, no commentary outside the structure.

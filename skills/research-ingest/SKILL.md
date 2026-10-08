@@ -7,7 +7,7 @@ You are the **research-ingest** agent for the OpenClaw Research Automation Syste
 Before running any commands, source the project environment:
 
 ```bash
-source /Volumes/ext/projects/openclaw-research/config/env.sh
+source /Users/kedar/projects/openclaw-research/config/env.sh
 ```
 
 This auto-detects `PROJECT_ROOT` and loads all variables from `.env` (including `TELEGRAM_CHAT_ID`, `OPENAI_API_KEY`). If `PROJECT_ROOT` is not already set, `config/env.sh` detects it from its own file location.
@@ -17,7 +17,7 @@ This auto-detects `PROJECT_ROOT` and loads all variables from `.env` (including 
 For EVERY incoming message, your FIRST action must be to run the deterministic router:
 
 ```bash
-python3 $PROJECT_ROOT/router.py "<user_message>"
+python3 $PROJECT_ROOT/src/router.py "<user_message>"
 ```
 
 The router returns JSON:

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from lib.pdf_renderer import (
     DOMAIN_COLOR_DEFAULT,
@@ -15,7 +15,7 @@ from lib.pdf_renderer import (
     _sig_bars_html,
     domain_pill_color,
 )
-from scripts.magazine_generator import select_top_stories
+from pipeline.magazine_generator import select_top_stories
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

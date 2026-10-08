@@ -85,7 +85,7 @@ openclaw-research/
 |   +-- weekly_pipeline.sh      # Weekly cron script (10-step pipeline)
 |   +-- fetch_and_deliver.sh    # Fetch + deliver artifacts to Telegram
 |   +-- telegram_send.sh         # Telegram Bot API helpers (tg_send_message, tg_send_file, tg_send_audio)
-|   +-- nlm_ensure_auth.sh      # 5-layer NLM auth recovery (quick check, rotation, CDP, nlm login, Playwright sync)
+|   +-- nlm_ensure_auth.sh      # 6-layer NLM auth recovery (quick check, rotation, CDP, CDP-attach login, nlm login, Playwright sync)
 |   +-- nlm_rotate_cookies.py   # Google PSIDTS cookie rotation
 |   +-- nlm_download_audio.py   # NLM audio download (CDP workaround)
 |   +-- nlm_create_report.sh    # NLM report with custom prompt
@@ -150,23 +150,24 @@ openclaw-research/
 
 | Script | Usage | Description |
 |--------|-------|-------------|
-| `daily_pipeline.sh` | `bash scripts/daily_pipeline.sh [--skip-nlm\|--pdf-only\|--date YYYY-MM-DD\|--use-playwright]` | Daily launchd (11 AM ET). Steps 0-10: newsletter fetch, blog fetch, HTML/PDF generation, NLM notebook + report + podcast (30-min audio poll), magazine HTML, RAG indexing, Telegram delivery via direct Bot API. 2-day item window. |
+| `daily_pipeline.sh` | `bash scripts/daily_pipeline.sh [--skip-nlm\|--pdf-only\|--date YYYY-MM-DD\|--use-playwright]` | Daily launchd (11 AM ET). Steps 0-10: newsletter fetch, blog fetch, HTML/PDF generation, NLM notebook + report + podcast (30-min audio poll), magazine HTML, Deep Dive Review (Step 6.6: per-paper explainer PDF), RAG indexing, Telegram delivery via direct Bot API. 2-day item window. |
 | `weekly_pipeline.sh` | `bash scripts/weekly_pipeline.sh [--skip-nlm\|--dry-run]` | Weekly launchd (Sat 9 AM ET). 10 steps: archive, newsletter, blog, x-monitor, HF triage, data triage, content-processor, NLM orchestrator, magazine generator, news digest, delivery. Consolidated weekly report + per-category podcasts. |
 | `telegram_send.sh` | `source scripts/telegram_send.sh` | Telegram Bot API helpers: `tg_send_message`, `tg_send_file`, `tg_send_audio`. Uses curl directly — no OpenClaw gateway dependency. `sendAudio` gives inline player for podcasts. |
 | `fetch_and_deliver.sh` | `bash scripts/fetch_and_deliver.sh <category> <artifact>` | Fetch latest artifact + deliver via Telegram. Handles daily/research/news branching. |
-| `nlm_ensure_auth.sh` | `bash scripts/nlm_ensure_auth.sh` | 5-layer NLM auth recovery: (1) quick check, (2) cookie rotation, (3) CDP extraction, (4) `nlm login` via Chrome CDP, (5) Playwright `--sync-auth` with auto-login. Exit 1 = all failed + Telegram alert. |
+| `nlm_ensure_auth.sh` | `bash scripts/nlm_ensure_auth.sh` | 6-layer NLM auth recovery: (1) quick check, (2) cookie rotation, (3) CDP extraction, (4) CDP-attach login — headless Chrome with the dedicated `~/.notebooklm-mcp-cli/chrome-profiles/default` profile + `nlm login --provider openclaw`, (5) `nlm login`, (6) Playwright `--sync-auth` with auto-login. Exit 1 = all failed + Telegram alert. |
 | `nlm_rotate_cookies.py` | `.venv/bin/python3 scripts/nlm_rotate_cookies.py [--check\|--verify\|--cdp]` | Rotates Google PSIDTS cookies via RotateCookies endpoint. Falls back to CDP. |
 | `nlm_download_audio.py` | `.venv/bin/python3 scripts/nlm_download_audio.py <notebook> --output <path>` | Downloads NLM audio via Chrome CDP cookies (workaround for httpx TooManyRedirects). |
 | `nlm_create_report.sh` | `bash scripts/nlm_create_report.sh <notebook-id> [prompt-file]` | Creates NLM report with custom prompt. Defaults to weekly prompt; pass `config/prompts/daily-report-prompt-v3.txt` for daily. |
 | `rag_chat.py` | `.venv/bin/python3 scripts/rag_chat.py "question"` | Full Chat/RAG pipeline: ChromaDB search, NLM auth, notebook queries, formatted output. |
 | `content_processor.py` | `.venv/bin/python3 scripts/content_processor.py [--dry-run]` | Categorizes sources, creates companion notes per category group. |
 | `fetch_latest.py` | `.venv/bin/python3 scripts/fetch_latest.py --category <cat> --artifact <type>` | Finds latest notebook/artifact from notebooks.json or daily-feed/. |
-| `enhance_report.py` | `.venv/bin/python3 scripts/enhance_report.py --input report.md [--dry-run]` | Post-processes NLM reports (cleanup, source links appendix). |
+| `enhance_report.py` | `.venv/bin/python3 src/pipeline/enhance_report.py --input report.md [--manifest data/daily-feed/DATE-sources.txt] [--dry-run]` | Post-processes NLM reports: removes extra TL;DRs, validates headings, and rebuilds `## Source Links` **deterministically** — strips the model's unreliable version and regenerates from the `--manifest` of URLs actually added to the notebook (falls back to `sources.json` by `--status`). |
 | `index_notebook.py` | `.venv/bin/python3 scripts/index_notebook.py --notebook-id <id> [--all\|--report-file <path>]` | Indexes notebook sources + report TL;DRs into ChromaDB. |
 | `retry.sh` | `bash scripts/retry.sh <max_retries> <command...>` | Generic retry with exponential backoff (5s, 15s, 45s). |
 | `archive_old_news.py` | `.venv/bin/python3 scripts/archive_old_news.py [--days 30] [--dry-run]` | Archives queued news items older than N days to `data/archive/news-YYYY-MM.json`. Runs as Step 0 in weekly pipeline. |
 | `hf_triage.py` | `.venv/bin/python3 scripts/hf_triage.py [--no-llm] [--batch-size 100] [--dry-run]` | Batch content classifier. Domain rules + local Qwen2.5-7B-Instruct for uncertain items. Outputs `data/triage-results.json`. Runs as Step 2.5 in weekly pipeline. |
 | `magazine_generator.py` | `.venv/bin/python3 scripts/magazine_generator.py [--date YYYY-MM-DD] [--no-openai] [--pdf] [--dry-run]` | Builds magazine JSON from triage results + NLM report. GPT-4o writes editorial brief, section intros, section previews, and item briefs. Selects top 3-5 stories for front page. Cross-section URL dedup (first section wins). Featured items capped at 3 per section. `--pdf` renders via WeasyPrint. |
+| `deep_dive_generator.py` | `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib .venv/bin/python3 src/pipeline/deep_dive_generator.py --date YYYY-MM-DD --notebook-id <id> --report-md <path> [--max-podcast 3] [--dry-run]` | **Deep Dive Review** (daily Step 6.6). Selects the day's research papers (notebook source list = authoritative set; NLM report `url_map` enriches significance), writes a review-grade per-paper explainer via `nlm notebook query --source-ids` (grounded; content-floor + stub fallback), renders one combined `DATE-deepdive.pdf`, and emits `DATE-deepdive-plan.json` naming the top ≤3 medium+ papers for per-paper podcasts (Phase 2). |
 | `pipeline_alert.sh` | `bash scripts/pipeline_alert.sh "<message>"` | Sends Telegram alert on pipeline failure. |
 | `nlm_playwright.py` | `.venv/bin/python3 scripts/nlm_playwright.py --create "Title" --add-urls URL... [--headless] [--cdp-url URL]` | NLM browser automation via Playwright. Full workflow: login, notebook, sources, report, podcast, download, share. Fixes BUG-001 (audio download). `--sync-auth` syncs Playwright cookies to nlm CLI format (Layer 5 of auth recovery). Auto-cleans stale profile lock files. Logs to `data/nlm-operations-log.json`. |
 
@@ -248,6 +249,45 @@ You do **not** need to set `PROJECT_ROOT` in `.env` when running from within the
 | `news-digest` | Weekly news roundup from `news-queue.json`. Creates NLM notebook + deep-dive podcast. Requires 3+ articles. |
 | `chat-rag` | Notebook-routed RAG queries. ChromaDB identifies notebooks, NLM provides deep answers with citations. |
 
+## Notebook Lifecycle
+
+NotebookLM is a rendering service, not storage: the account is hard-capped at
+500 notebooks and has no versioning or backup. Notebooks are therefore
+disposable. Each run generates its artifacts, captures everything to disk and
+SQLite, proves the capture, and then deletes the notebook upstream.
+
+| Command | Purpose |
+|---------|---------|
+| `.venv/bin/python3 tools/build_allowlist.py` | Freeze the delete allowlist (one-shot). Writes `data/backfill-allowlist.json`, `data/backfill-excluded.json`, and the committed digest `config/backfill-allowlist.sha256`. |
+| `.venv/bin/python3 src/pipeline/reclaim_notebooks.py --plan` | Write the delete manifest. Destroys nothing. |
+| `... reclaim_notebooks.py --no-delete --limit N` | Capture and verify N notebooks without deleting. |
+| `... reclaim_notebooks.py --execute --limit N [--allow-thin-sources] [--allow-empty]` | Capture, verify and delete. Irreversible. Hard-capped at 25 per run. |
+| `... daily_capture_delete.py --capacity-check` | Account size; exit 1 means do not create. |
+| `... daily_capture_delete.py --notebook-id <id> --run-id <id>` | Daily Step 11: archive the run's notebook and release its slot. |
+
+**Two delete authorities, and neither falls back to the other.** Reclaim
+deletes only ids in the frozen, digest-verified allowlist — titles are never
+re-matched at delete time, so a personal notebook shaped like
+`Anything - Week of 2027-01-04` can never become deletable. The daily path
+deletes only a notebook the running process created.
+
+**The verification gate** (`src/pipeline/capture_verify.py`) demands positive
+proof, not absence of error. It refuses on: a notebook outside its authority,
+drift from the frozen snapshot, source counts that disagree or are vacuously
+zero, a source captured below its per-type length floor, a `download all` item
+reporting `success: false`, an artifact skipped for an unsupported type, an
+artifact in a non-terminal state, a zero-byte or size-mismatched file, an HTML
+error page saved as markdown, media with no playable duration, a path escaping
+the notebook directory, a hardlink into another notebook's capture, and a
+changed volume device id. Any failure routes the notebook to `needs_human` and
+leaves it alive.
+
+**Weekly notebook creation is retired.** It produced 399 of the 465 reclaimable
+notebooks — one category-week became 28 of them. `scripts/weekly_pipeline.sh`
+still runs steps 0-4 (newsletters, blogs, X, archiving, HF triage, content
+processing) and exits before the orchestrator; set `WEEKLY_NOTEBOOKS=1` to
+re-enable it. The daily pipeline is the only notebook-producing path.
+
 ## Data Files
 
 All persistent state lives in `data/`:
@@ -265,7 +305,11 @@ All persistent state lives in `data/`:
 | `nlm-operations-log.json` | Append-only provenance log for Playwright NLM runs. Tracks every URL, text source, and artifact per run with status, size, and timing. Created by `nlm_playwright.py`. |
 | `triage-results.json` | HF triage classification results. Each item has content_type (research/news/blog), confidence, method (domain_rule/title_heuristic/llm), reasoning. Created by `scripts/hf_triage.py`, consumed by `scripts/magazine_generator.py`. Incremental — cached results are reused across runs. |
 | `triage-plan.json` | Generated triage plan (notebook grouping, dedup report). Created by `data_triage.py --auto`, consumed by content-processor. After use, renamed to `triage-plan-consumed-YYYY-MM-DD.json` |
-| `daily-feed/` | Directory of daily feed artifacts. Contains `YYYY-MM-DD.md` (deterministic briefing), `YYYY-MM-DD.pdf` (magazine PDF when `--magazine` used, else plain PDF), `YYYY-MM-DD-report.md` (NLM report — v3 markdown), `YYYY-MM-DD-report.pdf` (NLM report PDF), `YYYY-MM-DD-podcast-raw.mp4` (original audio/mp4 from NLM), `YYYY-MM-DD-podcast.mp3` (compressed 48kbps) |
+| `research.db` | SQLite archive: `runs`, `notebooks`, `sources`, `artifacts`, `notebook_events`. The durable record of every captured notebook — what it held, where each artifact landed, and whether it was deleted upstream. Gitignored. |
+| `archive/notebooks/<notebook_id>/` | Captured artifacts (`capture/artifacts/<artifact_id>.<ext>`), extracted source text (`capture/sources/<source_id>.txt`), `manifest.json`, `studio-status.json`. Keyed by notebook id, never by title — four titles are duplicated across nine notebooks and 26 aliases contain a literal `/`. Gitignored. |
+| `backfill-allowlist.json` / `backfill-excluded.json` | The frozen delete allowlist and the protected set. Digest committed at `config/backfill-allowlist.sha256`; the protected ids are also committed at `docs/backfill-excluded-ids.json`, since `data/` is gitignored. |
+| `deleted-ids.log` | Append-only, fsynced, mode 0600, mirrored to `~/openclaw-research-backups/`. One self-contained JSON record per deletion, written *before* the delete call — the only trace that survives if the database write fails afterwards. |
+| `daily-feed/` | Directory of daily feed artifacts. Contains `YYYY-MM-DD.md` (deterministic briefing), `YYYY-MM-DD.pdf` (magazine PDF when `--magazine` used, else plain PDF), `YYYY-MM-DD-report.md` (NLM report — v3 markdown), `YYYY-MM-DD-report.pdf` (NLM report PDF), `YYYY-MM-DD-podcast-raw.mp4` (original audio/mp4 from NLM), `YYYY-MM-DD-podcast.mp3` (compressed 48kbps), `YYYY-MM-DD-sources.txt` (deterministic manifest of source URLs actually added to the notebook, written at source-add time; consumed by `enhance_report.py` to build the report's `## Source Links` from ground truth), `YYYY-MM-DD-deepdive.md`/`-deepdive.pdf` (Deep Dive Review — per-paper explainers), `YYYY-MM-DD-deepdive-plan.json` (one-way plan naming top ≤3 papers + source_ids + focus prompts for Phase 2 podcasts) |
 | `archive/` | Archived old news items. `news-YYYY-MM.json` files grouped by month. Created by `scripts/archive_old_news.py` (weekly pipeline Step 0). |
 
 ## Categories
@@ -318,7 +362,7 @@ User: "chat what papers discuss attention?"
   +- Step 4: Merge responses -> answer with citations
 ```
 
-**Scoring**: Results are filtered by `MIN_NOTEBOOK_SCORE = 0.6` (removes irrelevant matches), then ranked by composite score (70% best match quality + 30% normalized hit volume).
+**Scoring**: Results are filtered by `MIN_NOTEBOOK_SCORE` (`src/rag/query.py:36`, currently `0.3`), then ranked by composite score (70% best match quality + 30% normalized hit volume).
 
 ### What Gets Indexed
 
@@ -475,9 +519,15 @@ nlm notebook query research "Summarize the key findings"
 ```bash
 nlm audio create research --format deep_dive --length default --confirm
 nlm studio status research          # poll until generation completes
-# NOTE: `nlm download audio` is broken (TooManyRedirects). Use the workaround:
-.venv/bin/python3 scripts/nlm_download_audio.py research --output podcast.mp4
+nlm download all research -d ./out --json   # fetches audio too (see below)
+# Fallback if the media URL is still propagating:
+.venv/bin/python3 src/nlm/nlm_download_audio.py research --output podcast.mp4
 ```
+
+`nlm download all` downloads every completed artifact, audio included, and
+reports each one's path in its JSON. Prefer it over the per-type commands: it
+is one call, and its `items[].success` field is what tells you a download
+actually finished rather than leaving a partial file behind.
 Audio formats: `deep_dive`, `brief`, `critique`, `debate`
 Lengths: `short`, `default`, `long`
 
@@ -650,10 +700,14 @@ Pre-processing step in the weekly pipeline that handles deduplication, volume an
 | File | Used by | Purpose |
 |------|---------|---------|
 | `config/google-credentials.json` | `nlm_playwright.py` | Google account credentials for auto-login when NLM session expires. Fields: `email`, `password`, `profile_dir`. Gitignored. Auto-login attempts headless form fill; falls back to `--login` prompt on 2FA or failure. |
-| `config/prompts/daily-report-prompt-v3.txt` | `nlm_create_report.sh` | Daily report: standard markdown (## sections, ### articles, **Source:** URLs, **TL;DR:** summaries). Parsed by `daily_feed_generator.py::parse_nlm_report()`. |
-| `config/prompts/daily-podcast-focus.txt` | `nlm audio create --focus` | Daily podcast: cross-source synthesis, technical briefing, architecture highlights. |
-| `config/prompts/weekly-podcast-focus.txt` | `nlm audio create --focus` | Weekly podcast: deep architecture analysis, critical peer review, multi-paper synthesis. |
-| `templates/report-prompt.txt` | `nlm_create_report.sh` (default) | Weekly report: TL;DR, executive summary, architecture/methodology analysis, actionable insights. |
+| `config/prompts/daily-report-prompt-v3.txt` | `nlm_create_report.sh` | Daily report: standard markdown (## sections, ### articles, **Source:** URLs, **Analysis:** bodies). Parsed by `daily_feed_generator.py::parse_nlm_report()`. **Technical tone** (reverted from the JournalClub arc, which hurt the whole-report briefing — the arc now lives in the per-paper deep-dive explainer). Format-preserving revert; guarded by `tests/test_report_parser.py::TestReportPromptContract`. |
+| `config/prompts/daily-podcast-focus.txt` | `nlm audio create --focus` | Daily podcast: two-host explainer (Explainer + Curious Skeptic) following the **JournalClub arc** per theme; accessible-but-precise cross-source synthesis. |
+| `config/prompts/weekly-podcast-focus.txt` | `nlm audio create --focus` | Weekly podcast: deep two-host explainer (Explainer + Critical Peer Reviewer) following the **JournalClub arc**; architecture walkthrough, multi-paper synthesis. |
+| `config/prompts/magazine-structure-prompt.txt` | `magazine_generator.py` | GPT-4o system prompt for editorial brief, section intros/previews, and per-item briefs. Compressed **JournalClub arc** (hook → mechanism → takeaway). Outputs JSON contract (`editorial_brief`, `sections[].introduction/preview/briefs[]`). |
+| `config/prompts/deep-dive-explainer-prompt.txt` | `deep_dive_generator.py` (via `nlm notebook query`) | Per-paper deep-dive explainer template (`{PAPER_TITLE}`/`{PAPER_URL}` placeholders): the 7-beat JournalClub-arc-plus-review (hook → problem → prior-art flaw → method → experiments/results → critique → why it matters). Instructs grounding/abstention ("sources don't detail X" over fabrication). |
+| `config/prompts/deep-dive-podcast-focus.txt` | `nlm audio create --source-ids --focus` (Phase 2) | Single-paper podcast focus: two-host (Explainer + Curious Skeptic) walkthrough of one scoped paper following the same arc. |
+| `templates/report-prompt.txt` | `nlm_create_report.sh` (default) | Weekly report: TL;DR, executive summary, architecture/methodology analysis, actionable insights — written in the **JournalClub arc** style. |
+| `config/prompts/*.technical.txt`, `templates/report-prompt.technical.txt` | (fallback / source) | Technical-dense versions kept for A/B. `daily-report-prompt-v3.txt` is currently the technical version (reverted); the podcast/magazine/weekly-report prompts remain JournalClub-style. Swap a `.technical.txt` over the live name to revert that prompt's style. |
 
 ## External Dependencies
 
@@ -679,7 +733,7 @@ Pre-processing step in the weekly pipeline that handles deduplication, volume an
 
 | Tool | Version | Purpose |
 |------|---------|---------|
-| `nlm` (notebooklm-mcp-cli) | 0.3.15 | NotebookLM CLI for notebooks, sources, audio, reports |
+| `nlm` (notebooklm-mcp-cli) | 0.9.6 | NotebookLM CLI for notebooks, sources, audio, reports. 0.9.x is required since the NotebookLM → notebook.google.com migration. `download all` fetches every artifact type including audio (BUG-001 fixed upstream). |
 | `ffmpeg` | 8.0.1 | Podcast audio compression (48kbps mono for Telegram) |
 | `pandoc` | 3.9 | Report format conversion |
 | `pango` | — | Font rendering (required by WeasyPrint) |
@@ -730,7 +784,7 @@ When registered via `nlm setup add claude-code`, Claude Code can call these tool
 - **Session labels**: Do NOT use `sessions_send` tool in pipeline instructions. The LLM should just reply with text directly — OpenClaw routes it to Telegram automatically.
 
 ### NotebookLM commands failing
-- Google rotates `__Secure-1PSIDTS` and other cookies every ~10 minutes. The `scripts/nlm_ensure_auth.sh` has 4-layer recovery: (1) quick auth check, (2) cookie rotation via `RotateCookies` endpoint, (3) CDP extraction from running Chrome, (4) headless `nlm login`.
+- Google rotates `__Secure-1PSIDTS` and other cookies every ~10 minutes. The `scripts/nlm_ensure_auth.sh` has 6-layer recovery: (1) quick auth check, (2) cookie rotation via `RotateCookies` endpoint, (3) CDP extraction from running Chrome, (4) CDP-attach login via the dedicated Chrome profile (headless, recovers a fully dead session), (5) `nlm login`, (6) Playwright sync.
 - Manual re-authenticate: `~/.local/bin/nlm login`
 - NotebookLM MCP registration with Claude Code is NOT needed for the OpenClaw pipeline — the pipeline uses `nlm` CLI commands directly
 - Verify tool is installed: `~/.local/bin/nlm --version`
@@ -761,11 +815,11 @@ When registered via `nlm setup add claude-code`, Claude Code can call these tool
 - If ffmpeg fails, the raw file still exists as `*-podcast-raw.mp4`; share via notebook link instead
 - NLM outputs audio as `audio/mp4` format — raw files are `.mp4`, ffmpeg converts to `.mp3`
 
-### `nlm download audio` fails (TooManyRedirects)
-- **Known bug**: `nlm download audio` always fails because httpx strips cookies on cross-domain redirects through Google's CDN chain (`lh3.googleusercontent.com` -> `lh3.google.com` -> `googlevideo.com`).
-- **Fix**: Use `scripts/nlm_download_audio.py` instead, which extracts cookies from Chrome via CDP and manually follows the redirect chain with domain-aware cookies.
-- **Both pipelines** (`daily_pipeline.sh`, `weekly_pipeline.sh`) already use this workaround.
-- **Requires**: Chrome running with `--remote-debugging-port` (any port in 9222-9231).
+### `nlm download audio` fails (TooManyRedirects) — FIXED upstream in 0.9.6
+- **Was**: httpx stripped cookies across Google's CDN redirect chain, so audio downloads always failed (BUG-001). 0.9.x is also required since the notebook.google.com migration.
+- **Now**: `nlm download all <notebook> -d <dir> --json` fetches audio directly. Verified 2026-09-29: an 83 MB `.m4a`, `ffprobe` 2582 s @ 257 kbps, no Chrome and no Playwright involved.
+- `src/nlm/client.py` and the archive capture path use `download all`.
+- **Fallback, still wired into both pipelines**: `src/nlm/nlm_download_audio.py` extracts cookies from Chrome via CDP and follows the redirect chain with domain-aware cookies. Requires Chrome with `--remote-debugging-port` (9222-9231). Keep it until a few daily runs confirm 0.9.6 in production — for long audio the media URL can keep propagating well past `status=completed` (BUG-015).
 - `nlm download report` works fine (text, not CDN-streamed).
 
 ### `nlm download` syntax (for report/other non-audio artifacts)

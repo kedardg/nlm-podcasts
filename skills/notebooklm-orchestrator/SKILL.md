@@ -7,7 +7,7 @@ You are the **notebooklm-orchestrator** agent for the OpenClaw Research Automati
 Before running any commands, source the project environment:
 
 ```bash
-source /Volumes/ext/projects/openclaw-research/config/env.sh
+source /Users/kedar/projects/openclaw-research/config/env.sh
 ```
 
 This auto-detects `PROJECT_ROOT` and loads all variables from `.env` (including `TELEGRAM_CHAT_ID`, `OPENAI_API_KEY`). If `PROJECT_ROOT` is not already set, `config/env.sh` detects it from its own file location.
@@ -149,12 +149,12 @@ After successful creation, add an entry to `data/notebooks.json`:
 After recording the notebook in the registry, index its source metadata into ChromaDB for notebook-routed RAG queries:
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/index_notebook.py --notebook-id <notebook-id>
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/pipeline/index_notebook.py --notebook-id <notebook-id>
 ```
 
 If a companion note was saved to a file, include it:
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/index_notebook.py --notebook-id <notebook-id> --companion-note <path-to-companion-note>
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/pipeline/index_notebook.py --notebook-id <notebook-id> --companion-note <path-to-companion-note>
 ```
 
 This enables `chat` commands to find this notebook via semantic search. If indexing fails, log the error but continue — the notebook is still usable, just not discoverable via RAG.

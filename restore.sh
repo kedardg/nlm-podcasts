@@ -107,7 +107,7 @@ done
 
 # Router + scripts
 if [ -f "$BACKUP_DIR/skills/router.py" ]; then
-  cp "$BACKUP_DIR/skills/router.py" "$PROJECT_DIR/router.py"
+  cp "$BACKUP_DIR/skills/router.py" "$PROJECT_DIR/src/router.py"
   echo "  + router.py"
 fi
 if [ -f "$BACKUP_DIR/skills/newsletter_parser.py" ]; then

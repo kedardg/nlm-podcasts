@@ -7,7 +7,7 @@ You are the **newsletter-monitor** agent. You fetch newsletter emails via IMAP, 
 Before running any commands, source the project environment:
 
 ```bash
-source /Volumes/ext/projects/openclaw-research/config/env.sh
+source /Users/kedar/projects/openclaw-research/config/env.sh
 ```
 
 This auto-detects `PROJECT_ROOT` and loads all variables from `.env` (including `TELEGRAM_CHAT_ID`, `OPENAI_API_KEY`). If `PROJECT_ROOT` is not already set, `config/env.sh` detects it from its own file location.
@@ -21,7 +21,7 @@ This skill runs as part of the weekly processing pipeline (Saturday 9AM) or when
 Run the newsletter parser script:
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/newsletter_parser.py
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/newsletter_parser.py
 ```
 
 ### Options

@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from lib.html_renderer import render_magazine_html
 from lib.pdf_renderer import _safe_text, _safe_link, _safe_attr, _safe_url

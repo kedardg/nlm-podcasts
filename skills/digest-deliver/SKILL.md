@@ -7,7 +7,7 @@ You are the **digest-deliver** agent for the OpenClaw Research Automation System
 Before running any commands, source the project environment:
 
 ```bash
-source /Volumes/ext/projects/openclaw-research/config/env.sh
+source /Users/kedar/projects/openclaw-research/config/env.sh
 ```
 
 This auto-detects `PROJECT_ROOT` and loads all variables from `.env` (including `TELEGRAM_CHAT_ID`, `OPENAI_API_KEY`). If `PROJECT_ROOT` is not already set, `config/env.sh` detects it from its own file location.
@@ -38,7 +38,7 @@ If this exits with code 1, the script has already sent a Telegram alert. **Do NO
 #### Download Podcast (if generated)
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/nlm_download_audio.py <notebook-id> --output $PROJECT_ROOT/data/<category-slug>-<date>-podcast-raw.mp4
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/nlm/nlm_download_audio.py <notebook-id> --output $PROJECT_ROOT/data/<category-slug>-<date>-podcast-raw.mp4
 ```
 Note: `nlm download audio` is broken (httpx TooManyRedirects). Use `nlm_download_audio.py` which extracts Chrome CDP cookies and follows the redirect chain. Requires Chrome with `--remote-debugging-port`.
 
@@ -69,13 +69,13 @@ If downloading the report directly isn't supported, get the report content via:
 After downloading the report markdown, run the deterministic post-processor and PDF renderer:
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/enhance_report.py \
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/pipeline/enhance_report.py \
   --input $PROJECT_ROOT/data/<slug>-<date>-report.md
 ```
 This removes extra per-section TL;DRs, appends a Source Links section from `data/sources.json`, and validates headings. No manual editing needed.
 
 ```bash
-DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/lib/pdf_renderer.py \
+DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib $PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/lib/pdf_renderer.py \
   --input $PROJECT_ROOT/data/<slug>-<date>-report.md \
   --output $PROJECT_ROOT/data/<slug>-<date>-report.pdf
 ```
@@ -86,7 +86,7 @@ If PDF conversion fails, deliver the .md file as fallback.
 After downloading the report, index the TL;DR into ChromaDB for better notebook routing. This is idempotent (upsert) — safe to run multiple times.
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/index_notebook.py \
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/pipeline/index_notebook.py \
   --notebook-id <notebook-id> \
   --report-file $PROJECT_ROOT/data/<slug>-<date>-report.md
 ```
@@ -172,13 +172,13 @@ Notebook source indexing should have already happened in the notebooklm-orchestr
 As a fallback, if any notebooks from this run are missing from the RAG index, re-index them:
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/index_notebook.py --notebook-id <notebook-id>
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/pipeline/index_notebook.py --notebook-id <notebook-id>
 ```
 
 Or re-index all notebooks if needed:
 
 ```bash
-$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/scripts/index_notebook.py --all
+$PROJECT_ROOT/.venv/bin/python3 $PROJECT_ROOT/src/pipeline/index_notebook.py --all
 ```
 
 Note: Use full path `~/.local/bin/nlm` for all NotebookLM CLI commands (the gateway doesn't source ~/.zshrc).

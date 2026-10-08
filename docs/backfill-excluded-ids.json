@@ -1,0 +1,244 @@
+{
+  "note": "Notebooks that must never be deleted. Committed copy of data/backfill-excluded.json, which lives in gitignored data/.",
+  "frozen_at": "2026-09-29T16:53:38Z",
+  "notebooks": [
+    {
+      "notebook_id": "86d8e517-b602-4094-8e8e-ea98ac396e9f",
+      "title": "Accounting FP&A",
+      "source_count": 34,
+      "updated_at": "2026-09-02T00:19:58Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "94f99dbe-5cb7-4775-9514-c1b01c6eec78",
+      "title": "IdentityRAG: Unifying Customer Context for High-Precision AI",
+      "source_count": 43,
+      "updated_at": "2026-08-31T16:46:33Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "a750881c-be2a-4d3a-a999-fb92ed6b58ad",
+      "title": "RAG and LLM Interview Study Guide",
+      "source_count": 12,
+      "updated_at": "2026-08-31T15:07:59Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "5bbe8e3b-353d-4d24-9fe5-a3eabddd7118",
+      "title": "Statistical Modeling and Causal Inference Library Directory",
+      "source_count": 53,
+      "updated_at": "2026-08-27T23:13:49Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "bb9b92cc-bd84-4dd6-b329-ade526adf38c",
+      "title": "CUDA from Zero — Kernels, Memory, and Neural Nets on the GPU",
+      "source_count": 11,
+      "updated_at": "2026-08-18T14:37:17Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "7b6670a9-b8be-4940-8735-8d843aa346c2",
+      "title": "Agentic and Automated Document Data Extraction",
+      "source_count": 8,
+      "updated_at": "2026-08-18T14:32:00Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "c3a2eb31-19eb-43aa-b54d-9eef0f76c85e",
+      "title": "vLLM vs TensorRT-LLM on RTX 5080 — Models & Advancements",
+      "source_count": 25,
+      "updated_at": "2026-08-18T14:31:53Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "d7efefd9-29ac-4b1d-a77c-1bc5d4730b7e",
+      "title": "Is AI Reasoning Right for the Wrong Reasons?",
+      "source_count": 1,
+      "updated_at": "2026-08-07T20:40:29Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "cd106035-3530-4281-a778-0105b2626db6",
+      "title": "Ultimate Beginner’s Guide to Financial Planning and Analysis",
+      "source_count": 20,
+      "updated_at": "2026-07-27T16:29:40Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "0e3f00d8-4842-4b2d-a95f-ad539ca19b58",
+      "title": "Precision Tracking: A Technical Guide to Pro Ball and Athlete Metrics",
+      "source_count": 108,
+      "updated_at": "2026-05-13T19:23:33Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "d0f192bf-33b3-45b4-ac2f-7a8f95692be2",
+      "title": "The Front Office Investment Banking Process Lifecycle",
+      "source_count": 11,
+      "updated_at": "2026-04-24T02:01:55Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "1a16bb03-018a-4590-94f4-4f02929c375f",
+      "title": "",
+      "source_count": 0,
+      "updated_at": "2026-03-05T15:08:15Z",
+      "reason": "empty title — needs human review"
+    },
+    {
+      "notebook_id": "7d2fd7df-03b0-475e-9f3b-e0d2d2d2e9d3",
+      "title": "Clinical NLP Advances: Retrieval, Evaluation, and Production Standards",
+      "source_count": 25,
+      "updated_at": "2026-03-03T00:07:07Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "fba29431-ceb1-4e24-b5eb-0c7a3bfce635",
+      "title": "PrePay-MAS Engineering Onboarding Guide: The 4-Stage Clinical Validation Pipeline",
+      "source_count": 17,
+      "updated_at": "2026-03-02T19:02:58Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "151f2658-e9bf-4010-9a02-e0be5e4075e2",
+      "title": "Insurance Claim Denials and the Appeals Process",
+      "source_count": 12,
+      "updated_at": "2026-02-23T04:13:51Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "da8545aa-0d8f-4805-8e46-991d74b430f7",
+      "title": "Research Digest - 2024-06-26",
+      "source_count": 37,
+      "updated_at": "2026-02-19T04:59:13Z",
+      "reason": "pre-repo Research Digest (predates first commit 2026-03-14)"
+    },
+    {
+      "notebook_id": "f6d8255f-41c1-4546-923e-51c6d20f340c",
+      "title": "Design and Analysis of Post-Tensioned Concrete Bridges",
+      "source_count": 10,
+      "updated_at": "2026-02-19T04:58:58Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "69116d38-6a78-4222-b2a8-966b66f38b63",
+      "title": "Research Digest - 2024-06-02",
+      "source_count": 11,
+      "updated_at": "2026-02-19T01:25:04Z",
+      "reason": "pre-repo Research Digest (predates first commit 2026-03-14)"
+    },
+    {
+      "notebook_id": "3f17ff07-d525-4bca-9c49-24576322bc87",
+      "title": "Research Digest - 2024-06-27",
+      "source_count": 13,
+      "updated_at": "2026-02-18T05:30:53Z",
+      "reason": "pre-repo Research Digest (predates first commit 2026-03-14)"
+    },
+    {
+      "notebook_id": "d21ff9a1-1e60-4097-8877-b8610955be5d",
+      "title": "Research Digest - 2024-06-10",
+      "source_count": 2,
+      "updated_at": "2026-02-18T04:16:42Z",
+      "reason": "pre-repo Research Digest (predates first commit 2026-03-14)"
+    },
+    {
+      "notebook_id": "1845927d-d6c0-4a19-8326-2c1ba3ac33e8",
+      "title": "Research Digest - 2026-02-17",
+      "source_count": 0,
+      "updated_at": "2026-02-18T03:49:35Z",
+      "reason": "pre-repo Research Digest (predates first commit 2026-03-14)"
+    },
+    {
+      "notebook_id": "f67dcced-3d7f-4569-acd4-60529f6e381d",
+      "title": "Research Digest - 2026-02-17",
+      "source_count": 0,
+      "updated_at": "2026-02-18T03:37:14Z",
+      "reason": "pre-repo Research Digest (predates first commit 2026-03-14)"
+    },
+    {
+      "notebook_id": "5c666764-a142-4442-acc3-d25b26ed62f8",
+      "title": "Research Digest - 2023-10-03",
+      "source_count": 3,
+      "updated_at": "2026-02-17T16:23:40Z",
+      "reason": "pre-repo Research Digest (predates first commit 2026-03-14)"
+    },
+    {
+      "notebook_id": "9f881b35-d734-49ba-8d80-6070a207adbc",
+      "title": "Research Digest - 2023-10-03",
+      "source_count": 3,
+      "updated_at": "2026-02-17T16:17:51Z",
+      "reason": "pre-repo Research Digest (predates first commit 2026-03-14)"
+    },
+    {
+      "notebook_id": "e719b57e-3a24-4c86-a087-502b3bfd9cb7",
+      "title": "Research Digest - 2023-10-03",
+      "source_count": 3,
+      "updated_at": "2026-02-17T15:21:11Z",
+      "reason": "pre-repo Research Digest (predates first commit 2026-03-14)"
+    },
+    {
+      "notebook_id": "3cc5cba7-8bff-425a-89f7-867dff91e33c",
+      "title": "Healthcare Waste and the WISeR Prior Authorization Model",
+      "source_count": 25,
+      "updated_at": "2026-02-13T17:16:09Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "a5e8c7de-656e-461c-85e8-6047377ba1b8",
+      "title": "ICD-10 Claim Validation System: Architecture and Coding Rules",
+      "source_count": 4,
+      "updated_at": "2026-01-17T16:15:04Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "14938b3c-cd4c-48ec-b1c3-2832ef5d53c8",
+      "title": "Machine Learning and Policy for Upcoding in Healthcare Payment",
+      "source_count": 15,
+      "updated_at": "2025-12-11T21:47:13Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "745e00c8-f7c9-43f9-a3e1-1a8391219201",
+      "title": "Medicare Inpatient Reimbursement, Coding, and Auditing",
+      "source_count": 22,
+      "updated_at": "2025-12-11T18:20:43Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "c0adc9dd-316b-40f6-a725-78dd3a1b2b18",
+      "title": "Transformers and Text Diffusion Language Models",
+      "source_count": 7,
+      "updated_at": "2025-11-10T01:36:58Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "0824d7eb-4820-40ef-ad7c-9a8e42a2e5a3",
+      "title": "Transformer Attention Parallelism and Efficiency",
+      "source_count": 10,
+      "updated_at": "2025-11-03T19:53:44Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "71cbef6e-e5c0-43b6-a474-99a071aff677",
+      "title": "TAT-QA: Numerical Reasoning over Hybrid Finance Data",
+      "source_count": 11,
+      "updated_at": "2025-10-07T04:08:54Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "bc088740-da9a-4b19-9c59-92c758546d28",
+      "title": "Fine-Tuning and Safety of GPT-OSS Models",
+      "source_count": 13,
+      "updated_at": "2025-10-01T12:52:18Z",
+      "reason": "personal or unrecognised"
+    },
+    {
+      "notebook_id": "2c793e42-822e-453d-9ee0-61520e3d944c",
+      "title": "Energy-Based Transformers: Scalable Learners and Thinkers",
+      "source_count": 7,
+      "updated_at": "2025-09-24T14:02:48Z",
+      "reason": "personal or unrecognised"
+    }
+  ]
+}

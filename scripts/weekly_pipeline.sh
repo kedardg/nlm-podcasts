@@ -63,29 +63,19 @@ log_json() {
 ensure_auth_or_rotate() {
     $NLM login --check 2>/dev/null && return 0
     log "  Auth expired, rotating..."
-    $PYTHON "$PROJECT_ROOT/scripts/nlm_rotate_cookies.py" --verify 2>/dev/null && return 0
+    $PYTHON "$PROJECT_ROOT/src/nlm/nlm_rotate_cookies.py" --verify 2>/dev/null && return 0
     log "  Rotation failed, trying CDP..."
-    $PYTHON "$PROJECT_ROOT/scripts/nlm_rotate_cookies.py" --cdp --verify 2>/dev/null && return 0
+    $PYTHON "$PROJECT_ROOT/src/nlm/nlm_rotate_cookies.py" --cdp --verify 2>/dev/null && return 0
     return 1
 }
 
-# ── Pipeline lock (prevent daily + weekly from running simultaneously) ──
-LOCKDIR="$PROJECT_ROOT/data/.pipeline.lock"
-if ! mkdir "$LOCKDIR" 2>/dev/null; then
-    # Check if stale (older than 2 hours)
-    if [[ -d "$LOCKDIR" ]]; then
-        LOCK_AGE=$(( $(date +%s) - $(stat -c %Y "$LOCKDIR" 2>/dev/null || stat -f %m "$LOCKDIR" 2>/dev/null || echo 0) ))
-        if [[ $LOCK_AGE -gt 7200 ]]; then
-            log "WARNING: Removing stale lock (${LOCK_AGE}s old)"
-            rmdir "$LOCKDIR" 2>/dev/null
-            mkdir "$LOCKDIR" 2>/dev/null || { log "ERROR: Cannot acquire lock"; exit 1; }
-        else
-            log "ERROR: Another pipeline is running (lock: $LOCKDIR, age: ${LOCK_AGE}s)"
-            exit 1
-        fi
-    fi
-fi
-trap 'rmdir "$LOCKDIR" 2>/dev/null' EXIT
+# ── Pipeline lock (prevent daily + weekly + reclaim running simultaneously) ──
+# Liveness-based, not clock-based: a reclaim pass over hundreds of notebooks
+# legitimately outlives any fixed timeout, and the old mtime heuristic paired
+# with an unconditional `trap rmdir` let a superseded process delete the new
+# holder's lock. See scripts/pipeline_lock.sh.
+source "$PROJECT_ROOT/scripts/pipeline_lock.sh"
+acquire_pipeline_lock "$PROJECT_ROOT/data/.pipeline.lock" "weekly" || exit 1
 
 log "═══ Weekly Research Digest Pipeline — $DATE ═══"
 log "Project: $PROJECT_ROOT"
@@ -94,24 +84,24 @@ echo ""
 
 # ── Step 0: Archive old news ─────────────────────────────────
 log "Step 0: Archive old news (>30 days)"
-$PYTHON "$PROJECT_ROOT/scripts/archive_old_news.py" --days 30 2>&1 && step_ok "archive-old-news" || step_fail "archive-old-news"
+$PYTHON "$PROJECT_ROOT/src/pipeline/archive_old_news.py" --days 30 2>&1 && step_ok "archive-old-news" || step_fail "archive-old-news"
 echo ""
 
 # ── Step 1: Newsletter Monitor ────────────────────────────────
 log "Step 1: Newsletter Monitor"
 if $DRY_RUN; then
-    $PYTHON "$PROJECT_ROOT/newsletter_parser.py" --check 2>&1 && step_ok "newsletter-monitor (dry run)" || step_fail "newsletter-monitor"
+    $PYTHON "$PROJECT_ROOT/src/newsletter_parser.py" --check 2>&1 && step_ok "newsletter-monitor (dry run)" || step_fail "newsletter-monitor"
 else
-    $PYTHON "$PROJECT_ROOT/newsletter_parser.py" 2>&1 && step_ok "newsletter-monitor" || step_fail "newsletter-monitor"
+    $PYTHON "$PROJECT_ROOT/src/newsletter_parser.py" 2>&1 && step_ok "newsletter-monitor" || step_fail "newsletter-monitor"
 fi
 echo ""
 
 # ── Step 1.5: Blog Monitor ───────────────────────────────────
 log "Step 1.5: Blog Monitor"
 if $DRY_RUN; then
-    $PYTHON "$PROJECT_ROOT/blog_monitor.py" --check 2>&1 && step_ok "blog-monitor (dry run)" || step_fail "blog-monitor"
+    $PYTHON "$PROJECT_ROOT/src/blog_monitor.py" --check 2>&1 && step_ok "blog-monitor (dry run)" || step_fail "blog-monitor"
 else
-    $PYTHON "$PROJECT_ROOT/blog_monitor.py" 2>&1 && step_ok "blog-monitor" || step_fail "blog-monitor"
+    $PYTHON "$PROJECT_ROOT/src/blog_monitor.py" 2>&1 && step_ok "blog-monitor" || step_fail "blog-monitor"
 fi
 echo ""
 
@@ -141,29 +131,49 @@ echo ""
 # ── Step 2.5: HF Triage (content classification) ─────────────
 log "Step 2.5: HF Triage"
 if $DRY_RUN; then
-    $PYTHON "$PROJECT_ROOT/scripts/hf_triage.py" --dry-run --no-llm 2>&1 && step_ok "hf-triage (dry run)" || step_fail "hf-triage"
+    $PYTHON "$PROJECT_ROOT/src/pipeline/hf_triage.py" --dry-run --no-llm 2>&1 && step_ok "hf-triage (dry run)" || step_fail "hf-triage"
 else
-    $PYTHON "$PROJECT_ROOT/scripts/hf_triage.py" 2>&1 && step_ok "hf-triage" || step_fail "hf-triage"
+    $PYTHON "$PROJECT_ROOT/src/pipeline/hf_triage.py" 2>&1 && step_ok "hf-triage" || step_fail "hf-triage"
 fi
 echo ""
 
 # ── Step 3: Data Triage ───────────────────────────────────────
 log "Step 3: Data Triage"
 if $DRY_RUN; then
-    $PYTHON "$PROJECT_ROOT/data_triage.py" --dry-run 2>&1 && step_ok "data-triage (dry run)" || step_fail "data-triage"
+    $PYTHON "$PROJECT_ROOT/src/data_triage.py" --dry-run 2>&1 && step_ok "data-triage (dry run)" || step_fail "data-triage"
 else
-    $PYTHON "$PROJECT_ROOT/data_triage.py" --auto 2>&1 && step_ok "data-triage" || step_fail "data-triage"
+    $PYTHON "$PROJECT_ROOT/src/data_triage.py" --auto 2>&1 && step_ok "data-triage" || step_fail "data-triage"
 fi
 echo ""
 
 # ── Step 4: Content Processor ─────────────────────────────────
 log "Step 4: Content Processor"
 if $DRY_RUN; then
-    $PYTHON "$PROJECT_ROOT/scripts/content_processor.py" --dry-run 2>&1 && step_ok "content-processor (dry run)" || step_fail "content-processor"
+    $PYTHON "$PROJECT_ROOT/src/pipeline/content_processor.py" --dry-run 2>&1 && step_ok "content-processor (dry run)" || step_fail "content-processor"
 else
-    $PYTHON "$PROJECT_ROOT/scripts/content_processor.py" 2>&1 && step_ok "content-processor" || step_fail "content-processor"
+    $PYTHON "$PROJECT_ROOT/src/pipeline/content_processor.py" 2>&1 && step_ok "content-processor" || step_fail "content-processor"
 fi
 echo ""
+
+# ── Steps 5-7 retired: weekly no longer creates notebooks ─────
+# Weekly notebook creation is what exhausted the 500-notebook account. It split
+# a single category-week into dozens of notebooks — "Machine Learning - Week of
+# 2026-08-15" alone became 28 of them across 441 sources — and none was ever
+# deleted. The daily pipeline is now the only notebook-producing path, at about
+# one a day, and it releases its slot in Step 11.
+#
+# Everything above this line is data collection (newsletters, blogs, X,
+# archiving, HF triage, content processing) and still runs on the weekly
+# schedule; it feeds the daily feed and the magazine. Set WEEKLY_NOTEBOOKS=1 to
+# re-enable the orchestrator, which requires free capacity in the account.
+if [[ "${WEEKLY_NOTEBOOKS:-0}" != "1" ]]; then
+    log "Steps 5-7: skipped (weekly notebook creation is retired)"
+    log "  Data collection steps 0-4 completed; daily pipeline owns notebooks."
+    echo ""
+    PIPELINE_END=$(date +%s)
+    log "=== Weekly data collection complete ($((PIPELINE_END - PIPELINE_START))s) ==="
+    exit 0
+fi
 
 # ── Step 5: NotebookLM Orchestrator ───────────────────────────
 log "Step 5: NotebookLM Orchestrator"
@@ -193,7 +203,7 @@ else
         else
             # Process each group: create notebook, add sources, generate artifacts
             $PYTHON -c "
-import json, subprocess, sys, os, time
+import json, subprocess, sys, os, time, re
 
 manifest = json.load(open('$MANIFEST'))
 sources_data = json.load(open('$PROJECT_ROOT/data/sources.json'))
@@ -204,18 +214,25 @@ date = '$DATE'
 
 src_map = {s['id']: s for s in sources_data.get('sources', [])}
 created = []
+used_slugs = {}
 
 for group_name, info in manifest.get('groups', {}).items():
-    # Idempotency: skip sources already in processing or completed status
+    # Include 'processing' too — content_processor marks sources as 'processing' after grouping
     queued_ids = [sid for sid in info.get('source_ids', [])
-                  if src_map.get(sid, {}).get('status') in ('queued', 'daily-digested')]
+                  if src_map.get(sid, {}).get('status') in ('queued', 'daily-digested', 'processing')]
     if not queued_ids:
         print(f'\\n--- {group_name}: no queued sources, skipping ---')
         continue
     info['source_ids'] = queued_ids
     info['source_count'] = len(queued_ids)
     print(f'\\n--- {group_name} ({info[\"source_count\"]} sources) ---')
-    slug = group_name.lower().replace(' ', '-').replace('&', 'and')[:30]
+    # Sanitize: split names like 'NLP (Part 1/20)' otherwise leave '/' and '('
+    # in the slug, corrupting file paths. Dedup: 30-char truncation collides
+    # between parts, silently overwriting each other's files.
+    slug = re.sub(r'[^a-z0-9._-]+', '-', group_name.lower().replace('&', 'and')).strip('-')[:30]
+    used_slugs[slug] = used_slugs.get(slug, 0) + 1
+    if used_slugs[slug] > 1:
+        slug = f'{slug[:26]}-c{used_slugs[slug]}'
     alias = f'{slug}-{date}'
 
     # Create notebook
@@ -290,7 +307,8 @@ for group_name, info in manifest.get('groups', {}).items():
     if focus:
         podcast_cmd.extend(['--focus', focus])
     r = subprocess.run(podcast_cmd, capture_output=True, text=True, timeout=30)
-    print(f'  Podcast: {\"requested\" if r.returncode == 0 else \"FAILED\"}')
+    podcast_ok = r.returncode == 0
+    print(f'  Podcast: {\"requested\" if podcast_ok else \"FAILED\"}')
 
     # Generate report
     report_script = f'{project}/scripts/nlm_create_report.sh'
@@ -312,7 +330,7 @@ for group_name, info in manifest.get('groups', {}).items():
         'created_at': '${DATE}T00:00:00Z',
         'source_count': added,
         'source_ids': info.get('source_ids', []),
-        'has_podcast': True, 'has_report': True,
+        'has_podcast': podcast_ok, 'has_report': True,
         'status': 'generating', 'run_id': f'weekly_{date}',
     })
 
@@ -338,11 +356,11 @@ echo ""
 log "Step 5.5: Magazine Generator"
 if $DRY_RUN; then
     DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:-}:/opt/homebrew/lib" \
-        $PYTHON "$PROJECT_ROOT/scripts/magazine_generator.py" --date "$DATE" --dry-run --no-openai 2>&1 \
+        $PYTHON "$PROJECT_ROOT/src/pipeline/magazine_generator.py" --date "$DATE" --dry-run --no-openai 2>&1 \
         && step_ok "magazine-generator (dry run)" || step_fail "magazine-generator"
 else
     DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:-}:/opt/homebrew/lib" \
-        $PYTHON "$PROJECT_ROOT/scripts/magazine_generator.py" --date "$DATE" 2>&1 \
+        $PYTHON "$PROJECT_ROOT/src/pipeline/magazine_generator.py" --date "$DATE" 2>&1 \
         && step_ok "magazine-generator" || step_fail "magazine-generator"
 fi
 echo ""
@@ -383,7 +401,7 @@ else
     log "  Waiting for artifact generation (polling every 30s, max 10 min)..."
 
     # Refresh auth before polling/download phase
-    $PYTHON "$PROJECT_ROOT/scripts/nlm_rotate_cookies.py" --verify 2>&1 || true
+    $PYTHON "$PROJECT_ROOT/src/nlm/nlm_rotate_cookies.py" --verify 2>&1 || true
 
     MANIFEST="$PROJECT_ROOT/data/content-processor-output.json"
     if [[ -f "$PROJECT_ROOT/data/notebooks.json" ]]; then
@@ -442,7 +460,7 @@ while waited < max_wait:
             auth_failures += 1
             if auth_failures <= 2:
                 print(f'  Auth expired — rotating cookies...')
-                subprocess.run([f'{project}/.venv/bin/python3', f'{project}/scripts/nlm_rotate_cookies.py', '--verify'],
+                subprocess.run([f'{project}/.venv/bin/python3', f'{project}/src/nlm/nlm_rotate_cookies.py', '--verify'],
                               capture_output=True, text=True, timeout=30)
             all_done = False
             break
@@ -459,13 +477,28 @@ for nb in recent:
     slug = nb.get('alias', nb['id'][:8])
     print(f'\\nDelivering: {nb[\"category_name\"]} ({slug})')
 
-    # Download podcast (uses CDP redirect-following workaround)
+    # Download podcast: nlm CLI first (works on 0.9.6+; retry while the media
+    # URL propagates), then the CDP redirect-following workaround as fallback.
+    # Skip entirely if podcast creation failed (e.g. NLM audio quota) — retrying
+    # a download that can never exist wasted ~6 min per notebook.
     podcast_raw = f'{project}/data/{slug}-podcast-raw.mp4'
     podcast = f'{project}/data/{slug}-podcast.mp3'
-    r = subprocess.run([f'{project}/.venv/bin/python3', f'{project}/scripts/nlm_download_audio.py',
-                       nb['id'], '--output', podcast_raw],
-                      capture_output=True, text=True, timeout=600)
-    if r.returncode == 0 and os.path.exists(podcast_raw) and os.path.getsize(podcast_raw) > 0:
+    if not nb.get('has_podcast', True):
+        print(f'  Podcast: skipped (creation failed)')
+    else:
+        for attempt in range(4):
+            r = subprocess.run([nlm, 'download', 'audio', nb['id'], '--output', podcast_raw],
+                              capture_output=True, text=True, timeout=600)
+            if os.path.exists(podcast_raw) and os.path.getsize(podcast_raw) > 0:
+                break
+            if attempt < 3:
+                print(f'  Podcast: download not ready — retrying in 120s...')
+                time.sleep(120)
+        if not (os.path.exists(podcast_raw) and os.path.getsize(podcast_raw) > 0):
+            r = subprocess.run([f'{project}/.venv/bin/python3', f'{project}/src/nlm/nlm_download_audio.py',
+                               nb['id'], '--output', podcast_raw],
+                              capture_output=True, text=True, timeout=600)
+    if os.path.exists(podcast_raw) and os.path.getsize(podcast_raw) > 0:
         # Compress for Telegram
         ffmpeg = '/opt/homebrew/bin/ffmpeg' if os.path.exists('/opt/homebrew/bin/ffmpeg') else 'ffmpeg'
         subprocess.run([ffmpeg, '-y', '-i', podcast_raw, '-ac', '1', '-b:a', '48k', '-ar', '22050', podcast],
@@ -484,7 +517,7 @@ for nb in recent:
         # Render PDF
         report_pdf = f'{project}/data/{slug}-report.pdf'
         os.environ['DYLD_FALLBACK_LIBRARY_PATH'] = os.environ.get('DYLD_FALLBACK_LIBRARY_PATH', '') + ':/opt/homebrew/lib'
-        r2 = subprocess.run([f'{project}/.venv/bin/python3', f'{project}/lib/pdf_renderer.py',
+        r2 = subprocess.run([f'{project}/.venv/bin/python3', f'{project}/src/lib/pdf_renderer.py',
                            '--input', report_md, '--output', report_pdf],
                           capture_output=True, text=True, timeout=60)
         if r2.returncode == 0:
@@ -501,7 +534,7 @@ for nb in recent:
                 break
 
     # Index in ChromaDB
-    subprocess.run([f'{project}/.venv/bin/python3', f'{project}/scripts/index_notebook.py',
+    subprocess.run([f'{project}/.venv/bin/python3', f'{project}/src/pipeline/index_notebook.py',
                    '--notebook-id', nb['id']],
                   capture_output=True, text=True, timeout=60)
 
@@ -540,7 +573,7 @@ if all_reports:
 
     # Render PDF (with TOC)
     subprocess.run(
-        [f'{project}/.venv/bin/python3', f'{project}/lib/pdf_renderer.py',
+        [f'{project}/.venv/bin/python3', f'{project}/src/lib/pdf_renderer.py',
          '--input', md_path, '--output', pdf_path],
         capture_output=True, text=True, timeout=120, env=env)
 
@@ -601,7 +634,7 @@ fi
 
 # Write run record to processing-log.json
 $PYTHON -c "
-import sys; sys.path.insert(0, '$PROJECT_ROOT')
+import sys; sys.path.insert(0, '$PROJECT_ROOT/src')
 from lib.file_utils import load_json, save_json, now_iso
 log = load_json('$PROJECT_ROOT/data/processing-log.json')
 log.setdefault('runs', []).append({
