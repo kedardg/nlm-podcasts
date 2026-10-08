@@ -730,3 +730,40 @@ def test_unavailable_status_keeps_waiting_rather_than_assuming_done(monkeypatch)
     daily = _daily_module()
     monkeypatch.setattr(daily.client, "studio_status", lambda _n: (False, None))
     assert not daily.wait_for_artifacts(NB, ["report"], timeout=1, interval=0)
+
+
+def test_an_empty_source_does_not_block_deletion():
+    """'empty' means nlm answered and the source has no extractable text — an
+    answer, not a failure. Blocking on it stranded 'Daily Feed — 2026-10-07'
+    (13 sources, artifacts captured, completeness 'full') on one empty source,
+    which is how the account starts growing again."""
+    rows = [
+        {"nlm_source_id": "s1", "content_status": "ok",
+         "source_type": "web_page", "char_count": 9000},
+        {"nlm_source_id": "s2", "content_status": "empty",
+         "source_type": "web_page", "char_count": 0},
+    ]
+    assert cv.check_source_content(cv.Verdict(), rows)
+
+
+def test_a_failed_source_capture_still_blocks_deletion():
+    """'error' means the call failed — we do not know what was in that source."""
+    rows = [
+        {"nlm_source_id": "s1", "content_status": "ok",
+         "source_type": "web_page", "char_count": 9000},
+        {"nlm_source_id": "s2", "content_status": "error",
+         "source_type": "web_page", "char_count": 0},
+    ]
+    assert not cv.check_source_content(cv.Verdict(), rows)
+
+
+def test_all_sources_empty_blocks_deletion():
+    """Every source empty is indistinguishable from a wholesale capture failure,
+    so it is refused however each row is labelled."""
+    rows = [
+        {"nlm_source_id": "s1", "content_status": "empty",
+         "source_type": "web_page", "char_count": 0},
+        {"nlm_source_id": "s2", "content_status": "empty",
+         "source_type": "web_page", "char_count": 0},
+    ]
+    assert not cv.check_source_content(cv.Verdict(), rows)

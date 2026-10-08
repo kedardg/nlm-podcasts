@@ -134,19 +134,33 @@ def check_source_counts(verdict, enumerated, listed, rows, *,
 def check_source_content(verdict, source_rows, *, allow_thin=False):
     """Condition 3 — every source captured real text, or says why not.
 
+    A source may legitimately have no text; what must never pass is a source we
+    failed to read. ``empty`` is the former and is tolerated, ``error`` the
+    latter and is refused — but at least one source has to carry real text, or
+    the capture is indistinguishable from having read nothing at all.
+
     ``allow_thin`` downgrades the per-type length floor to a recorded note.
     Some sources really are thin — a placeholder URL such as example.com
     returns ~179 characters, and that is the whole page, not a failed capture.
     Every other condition still applies.
     """
+    captured_any = False
     for row in source_rows:
         status = row.get("content_status")
+        if status == "empty":
+            # nlm answered and the source has no extractable text — an image-only
+            # page, an unparsed PDF, a dead link. That is an answer, not a failed
+            # capture: the capture step records 'error' when the call itself
+            # fails. Treating the two alike stranded a notebook whose artifacts
+            # had all verified, on one empty source out of thirteen.
+            continue
         if status != "ok":
             verdict.fail(
                 f"source {row.get('nlm_source_id')} has content_status="
-                f"{status!r}; only 'ok' permits deletion"
+                f"{status!r}; only 'ok' or 'empty' permits deletion"
             )
             continue
+        captured_any = True
         floor = CHAR_FLOORS.get(row.get("source_type"), DEFAULT_CHAR_FLOOR)
         if (row.get("char_count") or 0) < floor and not allow_thin:
             verdict.fail(
@@ -154,6 +168,13 @@ def check_source_content(verdict, source_rows, *, allow_thin=False):
                 f"{row.get('char_count')} chars, below the {floor} floor for "
                 f"{row.get('source_type')}"
             )
+    if source_rows and not captured_any:
+        # Every source empty is indistinguishable from a wholesale capture
+        # failure, so it is refused however the individual rows are labelled.
+        verdict.fail(
+            f"no source captured any text ({len(source_rows)} source(s), all "
+            f"empty or unreadable)"
+        )
     return verdict
 
 
