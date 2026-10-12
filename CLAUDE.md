@@ -193,6 +193,29 @@ source "$PROJECT_ROOT/config/env.sh"
 
 You do **not** need to set `PROJECT_ROOT` in `.env` when running from within the project directory — it's auto-detected. Set it only if running scripts from an external location.
 
+### `OPENCLAW_RESEARCH_ROOT` — which checkout a skill runs against
+
+`config/env.sh` derives `PROJECT_ROOT` from its own location, but the path *to*
+`env.sh` is the one thing it cannot self-detect. The `skills/*/SKILL.md`
+preambles therefore source it as:
+
+```bash
+source "${OPENCLAW_RESEARCH_ROOT:-$HOME/projects/openclaw-research}/config/env.sh"
+```
+
+The default is the production checkout that launchd runs. Export
+`OPENCLAW_RESEARCH_ROOT` to point a skill at a different one:
+
+```bash
+OPENCLAW_RESEARCH_ROOT=/Volumes/ext/projects/openclaw-research
+```
+
+**Never edit the literal path in a SKILL.md.** That is exactly how two copies of
+this repo drifted apart in 2026-10: each checkout rewrote these literals to suit
+itself, one set of edits sat uncommitted for weeks, and launchd kept running a
+checkout that had none of the fixes. One committed string plus one environment
+variable cannot drift, because the environment is not version-controlled.
+
 ## Prerequisites
 
 - **Node.js 22+** (for OpenClaw)

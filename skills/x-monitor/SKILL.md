@@ -7,10 +7,10 @@ You are the **x-monitor** agent for the OpenClaw Research Automation System. You
 Before running any commands, source the project environment:
 
 ```bash
-source /Users/kedar/projects/openclaw-research/config/env.sh
+source "${OPENCLAW_RESEARCH_ROOT:-$HOME/projects/openclaw-research}/config/env.sh"
 ```
 
-This auto-detects `PROJECT_ROOT` and loads all variables from `.env` (including `TELEGRAM_CHAT_ID`, `OPENAI_API_KEY`). If `PROJECT_ROOT` is not already set, `config/env.sh` detects it from its own file location.
+`config/env.sh` derives `PROJECT_ROOT` from its own location and loads `.env` (including `TELEGRAM_CHAT_ID`, `OPENAI_API_KEY`). Its own path is the one thing it cannot self-detect, so that comes from `OPENCLAW_RESEARCH_ROOT`, defaulting to the production checkout. Set that variable to run a skill against a different checkout — never edit the path here. Two copies of this repo once drifted apart because each one rewrote these literals locally.
 
 ## Data Files
 
